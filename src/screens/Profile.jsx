@@ -49,9 +49,8 @@ export default function Profile({ navigate }) {
       <div className="scroll-area relative z-10">
         {/* Hero */}
         <motion.div initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} className="flex flex-col items-center px-5 pt-6 pb-4">
-          <div className="relative mb-3">
+          <div className="mb-3">
             <div className="text-[72px] leading-none">{profile?.emoji || '😎'}</div>
-            <div className="absolute inset-[-4px] rounded-full border-[3px] border-primary pointer-events-none" />
           </div>
           <div className="font-display text-[28px] font-black text-ink mb-1">{profile?.display_name || 'You'}</div>
           <div className="text-[12px] text-[#aaa] mb-3">Dubai · Goodfriends member</div>

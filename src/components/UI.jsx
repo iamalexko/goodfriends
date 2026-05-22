@@ -31,7 +31,6 @@ export function TopBar({ navigate }) {
         <div
           onClick={() => navigate?.('profile')}
           className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-base cursor-pointer"
-          style={{ border: '2px solid #FB923C' }}
         >
           {profile?.emoji || '😎'}
         </div>
