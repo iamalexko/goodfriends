@@ -59,7 +59,6 @@ export default function PlanDetail({ navigate, planId }) {
 
   // Moments feed state
   const [posts, setPosts] = useState([])
-  const [comment, setComment] = useState('')
   const [uploading, setUploading] = useState(false)
   const [editingPost, setEditingPost] = useState(null) // { id, content }
   const [actionSheetPost, setActionSheetPost] = useState(null) // post being acted on
@@ -67,8 +66,13 @@ export default function PlanDetail({ navigate, planId }) {
   const [reactionPickerPostId, setReactionPickerPostId] = useState(null)
   const [lightbox, setLightbox] = useState(null) // { photos: string[], index: number }
   const [currentUserId, setCurrentUserId] = useState(null)
+  // Unified composer state — handles both text-only comments and photo+caption posts
+  const [composerText, setComposerText] = useState('')
+  const [composerPhoto, setComposerPhoto] = useState(null) // { file, previewUrl }
+  const [composerExpanded, setComposerExpanded] = useState(false)
   const fileInputRef = useRef(null)
-  const commentInputRef = useRef(null)
+  const composerRef = useRef(null)
+  const composerTextRef = useRef(null)
 
   useEffect(() => { loadPlan() }, [planId])
 
@@ -85,6 +89,25 @@ export default function PlanDetail({ navigate, planId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId])
 
+  // Collapse the composer when the user clicks outside it, but only if there's
+  // nothing in flight (no typed text, no attached photo, not editing).
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (composerText || composerPhoto || editingPost) return
+      if (composerRef.current && !composerRef.current.contains(e.target)) {
+        setComposerExpanded(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [composerText, composerPhoto, editingPost])
+
+  // Clean up the preview blob URL on unmount to avoid leaking memory.
+  useEffect(() => {
+    return () => { if (composerPhoto?.previewUrl) URL.revokeObjectURL(composerPhoto.previewUrl) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function loadPosts() {
     const { data, error } = await supabase
       .from('posts')
@@ -95,74 +118,96 @@ export default function PlanDetail({ navigate, planId }) {
     setPosts(data || [])
   }
 
-  async function uploadPhoto(file) {
-    if (!file) return
-    setUploading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setUploading(false); return }
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
-    const path = `${user.id}/${planId}-${Date.now()}.${ext}`
-
-    const { error: upErr } = await supabase.storage.from('plan-photos').upload(path, file, {
-      cacheControl: '3600',
-      upsert: false,
-      contentType: file.type || undefined,
-    })
-    if (upErr) {
-      console.error('PlanDetail: photo upload failed', upErr)
-      setUploading(false)
-      return
-    }
-    const { data: { publicUrl } } = supabase.storage.from('plan-photos').getPublicUrl(path)
-    const { error: insErr } = await supabase.from('posts').insert({
-      plan_id: planId,
-      user_id: user.id,
-      type: 'photo',
-      image_url: publicUrl,
-    })
-    if (insErr) console.error('PlanDetail: photo post insert failed', insErr)
-    setUploading(false)
-    loadPosts()
-  }
-
-  function onPickPhoto(e) {
+  function handlePhotoSelect(e) {
     const file = e.target.files?.[0]
-    if (file) uploadPhoto(file)
-    e.target.value = '' // allow re-selecting the same file
+    if (!file) return
+    // Clear any previous preview blob URL before swapping in the new one.
+    if (composerPhoto?.previewUrl) URL.revokeObjectURL(composerPhoto.previewUrl)
+    const previewUrl = URL.createObjectURL(file)
+    setComposerPhoto({ file, previewUrl })
+    setComposerExpanded(true)
   }
 
-  async function submitComment() {
-    const text = comment.trim()
-    if (!text) return
+  function removePhoto() {
+    if (composerPhoto?.previewUrl) URL.revokeObjectURL(composerPhoto.previewUrl)
+    setComposerPhoto(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // Unified submit — handles 3 cases:
+  //   1. Editing an existing comment (text-only update via posts.update)
+  //   2. New text-only comment (type='comment', content=text)
+  //   3. New photo post with optional caption (type='photo', image_url=url, caption=text|null)
+  async function submitPost() {
+    const text = composerText.trim()
+    if (!text && !composerPhoto) return
+
+    // Edit path: only existing comment posts can be edited (text field).
     if (editingPost) {
+      if (!text) return
       const { error } = await supabase.from('posts').update({ content: text }).eq('id', editingPost.id)
       if (error) { console.error('PlanDetail: edit comment failed', error); return }
       setEditingPost(null)
-    } else {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { error } = await supabase.from('posts').insert({
-        plan_id: planId,
-        user_id: user.id,
-        type: 'comment',
-        content: text,
-      })
-      if (error) { console.error('PlanDetail: insert comment failed', error); return }
+      setComposerText('')
+      setComposerExpanded(false)
+      loadPosts()
+      return
     }
-    setComment('')
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    setUploading(true)
+
+    let imageUrl = null
+    if (composerPhoto) {
+      const ext = (composerPhoto.file.name.split('.').pop() || 'jpg').toLowerCase()
+      const path = `${user.id}/${planId}-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('plan-photos').upload(path, composerPhoto.file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: composerPhoto.file.type || undefined,
+      })
+      if (upErr) {
+        console.error('PlanDetail: photo upload failed', upErr)
+        setUploading(false)
+        return
+      }
+      const { data: { publicUrl } } = supabase.storage.from('plan-photos').getPublicUrl(path)
+      imageUrl = publicUrl
+    }
+
+    const { error: insErr } = await supabase.from('posts').insert({
+      plan_id: planId,
+      user_id: user.id,
+      type: composerPhoto ? 'photo' : 'comment',
+      image_url: imageUrl,
+      caption: composerPhoto && text ? text : null,
+      content: !composerPhoto && text ? text : null,
+    })
+    if (insErr) console.error('PlanDetail: insert post failed', insErr)
+
+    // Reset composer
+    if (composerPhoto?.previewUrl) URL.revokeObjectURL(composerPhoto.previewUrl)
+    setComposerText('')
+    setComposerPhoto(null)
+    setComposerExpanded(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    setUploading(false)
     loadPosts()
   }
 
   function startEditing(post) {
     setActionSheetPost(null)
     setEditingPost({ id: post.id, content: post.content || '' })
-    setComment(post.content || '')
-    setTimeout(() => commentInputRef.current?.focus(), 50)
+    setComposerText(post.content || '')
+    setComposerExpanded(true)
+    setTimeout(() => composerTextRef.current?.focus(), 50)
   }
 
   function cancelEditing() {
     setEditingPost(null)
-    setComment('')
+    setComposerText('')
+    setComposerExpanded(false)
   }
 
   async function toggleReaction(postId, emoji) {
@@ -481,24 +526,9 @@ export default function PlanDetail({ navigate, planId }) {
 
         {/* Moments */}
         <Divider />
-        <div className="flex items-center justify-between px-5 mt-3 mb-3">
+        <div className="flex items-center px-5 mt-3 mb-3">
           <span className="text-[10px] font-bold tracking-widest uppercase text-[#bbb]">Moments</span>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            aria-label="Add photo"
-            className="w-[30px] h-[30px] rounded-full bg-black/5 flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
-          >
-            <i className="ti ti-camera text-ink text-sm" />
-          </button>
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={onPickPhoto}
-        />
 
         {posts.length === 0 && !uploading && (
           <div style={{ textAlign: 'center', padding: '32px 20px' }}>
@@ -725,6 +755,11 @@ export default function PlanDetail({ navigate, planId }) {
                     </div>
                   </div>
                 )}
+                {post.caption && (
+                  <p style={{ fontSize: 13, color: '#111', lineHeight: 1.5, margin: '6px 0 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {post.caption}
+                  </p>
+                )}
                 {reactionsBar}
               </div>
             )
@@ -802,38 +837,164 @@ export default function PlanDetail({ navigate, planId }) {
         <div className="h-[160px] md:h-[80px]" />
       </div>
 
-      {/* Comment input — pinned to viewport bottom, above the mobile nav bar
-          (or flush to bottom on desktop where the nav is a left sidebar). */}
-      <div className="fixed bottom-[88px] md:bottom-0 left-0 right-0 md:left-[220px] z-40 px-4 py-3 border-t border-black/[0.06] bg-[rgba(255,251,245,0.95)] backdrop-blur">
-        {editingPost && (
-          <div className="flex items-center justify-between mb-2 px-1">
-            <span className="text-[11px] text-primary font-semibold">Editing…</span>
-            <button onClick={cancelEditing} className="text-[#aaa] -mr-1 p-1" aria-label="Cancel editing">
-              <X size={14} strokeWidth={2.5} />
-            </button>
-          </div>
-        )}
-        <div className="flex items-center gap-2 max-w-[680px] mx-auto">
-          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-base flex-shrink-0">
-            {profile?.emoji || '😎'}
-          </div>
-          <input
-            ref={commentInputRef}
-            type="text"
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitComment() } }}
-            placeholder="Add a moment…"
-            className="flex-1 bg-white/80 backdrop-blur border border-black/10 rounded-full px-4 py-2.5 text-[13px] outline-none focus:border-primary"
-          />
-          <button
-            onClick={submitComment}
-            disabled={!comment.trim()}
-            aria-label={editingPost ? 'Save edit' : 'Send comment'}
-            className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${comment.trim() ? 'bg-ink' : 'bg-[#eee]'}`}
-          >
-            <i className={`ti ti-arrow-up text-base ${comment.trim() ? 'text-white' : 'text-[#bbb]'}`} />
-          </button>
+      {/* Unified composer — text + optional photo. Pinned to viewport bottom,
+          above the mobile nav bar (or flush to bottom on desktop where the
+          nav is a left sidebar). One file input shared between collapsed and
+          expanded camera buttons via fileInputRef. */}
+      <div
+        ref={composerRef}
+        className="fixed bottom-[88px] md:bottom-0 left-0 right-0 md:left-[220px] z-40 px-4 py-3 bg-[rgba(255,251,245,0.95)] backdrop-blur"
+      >
+        <input
+          type="file"
+          accept="image/*"
+          ref={fileInputRef}
+          onChange={handlePhotoSelect}
+          style={{ display: 'none' }}
+        />
+        <div className="max-w-[680px] mx-auto">
+          {editingPost && (
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className="text-[11px] text-primary font-semibold">Editing…</span>
+              <button onClick={cancelEditing} className="text-[#aaa] -mr-1 p-1" aria-label="Cancel editing">
+                <X size={14} strokeWidth={2.5} />
+              </button>
+            </div>
+          )}
+
+          {!composerExpanded && !composerPhoto && !editingPost ? (
+            // Collapsed state
+            <div
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 12px',
+                border: '1px solid rgba(0,0,0,0.1)',
+                borderRadius: 20, background: '#fff',
+                cursor: 'text',
+              }}
+              onClick={() => {
+                setComposerExpanded(true)
+                setTimeout(() => composerTextRef.current?.focus(), 50)
+              }}
+            >
+              <div style={{
+                width: 30, height: 30, borderRadius: '50%', background: '#f0f0f0',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 17, flexShrink: 0,
+              }}>
+                {profile?.emoji || '😎'}
+              </div>
+              <span style={{ flex: 1, fontSize: 13, color: '#ccc', fontFamily: 'Inter, sans-serif' }}>
+                Add a moment…
+              </span>
+              <div
+                onClick={e => { e.stopPropagation(); fileInputRef.current?.click() }}
+                style={{
+                  width: 28, height: 28, borderRadius: '50%', background: 'rgba(0,0,0,0.04)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+                aria-label="Attach photo"
+              >
+                <i className="ti ti-camera" style={{ fontSize: 14, color: '#888' }} />
+              </div>
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%', background: '#e5e7eb',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <i className="ti ti-arrow-up" style={{ fontSize: 13, color: '#aaa' }} />
+              </div>
+            </div>
+          ) : (
+            // Expanded state
+            <div style={{
+              border: `1px solid ${composerPhoto || composerText ? '#FB923C' : 'rgba(0,0,0,0.1)'}`,
+              borderRadius: 20, background: '#fff', overflow: 'hidden',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px 8px' }}>
+                <div style={{
+                  width: 30, height: 30, borderRadius: '50%', background: '#f0f0f0',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 17, flexShrink: 0, marginTop: 2,
+                }}>
+                  {profile?.emoji || '😎'}
+                </div>
+
+                {composerPhoto && (
+                  <div style={{
+                    position: 'relative', width: 72, height: 72, borderRadius: 10,
+                    overflow: 'hidden', flexShrink: 0,
+                  }}>
+                    <img src={composerPhoto.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      onClick={removePhoto}
+                      aria-label="Remove photo"
+                      style={{
+                        position: 'absolute', top: 3, right: 3, width: 16, height: 16,
+                        borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: 'none',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    >
+                      <i className="ti ti-x" style={{ fontSize: 9, color: '#fff' }} />
+                    </button>
+                  </div>
+                )}
+
+                <textarea
+                  ref={composerTextRef}
+                  autoFocus={composerExpanded && !composerPhoto && !editingPost}
+                  value={composerText}
+                  onChange={e => setComposerText(e.target.value)}
+                  placeholder={composerPhoto ? 'Add a caption… (optional)' : 'Add a moment…'}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitPost() } }}
+                  rows={composerPhoto ? 3 : 2}
+                  style={{
+                    flex: 1, border: 'none', outline: 'none', fontSize: 13,
+                    fontFamily: 'Inter, sans-serif', color: '#111', resize: 'none',
+                    background: 'transparent', lineHeight: 1.5, minHeight: 40, paddingTop: 2,
+                  }}
+                />
+              </div>
+
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '6px 12px 10px', borderTop: '1px solid rgba(0,0,0,0.06)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      width: 28, height: 28, borderRadius: '50%', background: 'rgba(0,0,0,0.04)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    }}
+                    aria-label="Attach photo"
+                  >
+                    <i className="ti ti-camera" style={{ fontSize: 14, color: '#888' }} />
+                  </div>
+                  {composerPhoto && (
+                    <span style={{ fontSize: 10, color: '#aaa' }}>1 photo</span>
+                  )}
+                </div>
+                <button
+                  onClick={submitPost}
+                  disabled={uploading || (!composerText.trim() && !composerPhoto)}
+                  aria-label={editingPost ? 'Save edit' : 'Send post'}
+                  style={{
+                    width: 30, height: 30, borderRadius: '50%', border: 'none',
+                    background: (composerText.trim() || composerPhoto) ? '#111' : '#e5e7eb',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: (composerText.trim() || composerPhoto) ? 'pointer' : 'default',
+                    padding: 0,
+                  }}
+                >
+                  <i
+                    className={`ti ${uploading ? 'ti-loader-2 animate-spin' : 'ti-arrow-up'}`}
+                    style={{ fontSize: 14, color: (composerText.trim() || composerPhoto) ? '#fff' : '#aaa' }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
