@@ -42,7 +42,7 @@ export default function Profile({ navigate }) {
 
   return (
     <div className="phone-shell">
-      <TopBar navigate={navigate} />
+      <TopBar navigate={navigate} group={null} />
       <div className="orb" style={{ width:200, height:200, background:'#FDE68A', top:-60, right:-50, opacity:0.45 }} />
       <div className="orb" style={{ width:140, height:140, background:'#BAE6FD', top:300, left:-40, opacity:0.35 }} />
 

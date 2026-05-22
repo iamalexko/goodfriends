@@ -441,7 +441,7 @@ export default function PlanDetail({ navigate, planId }) {
 
   return (
     <div className="phone-shell">
-      <TopBar navigate={navigate} />
+      <TopBar navigate={navigate} group={null} />
       <div className="orb" style={{ width:180, height:180, background:'#FDE68A', top:-50, right:-40, opacity:0.45 }} />
       <div className="orb" style={{ width:120, height:120, background:'#BAE6FD', top:200, left:-30, opacity:0.35 }} />
 

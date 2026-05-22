@@ -171,7 +171,7 @@ export default function Crew({ navigate }) {
 
   return (
     <div className="phone-shell">
-      <TopBar navigate={navigate} />
+      <TopBar navigate={navigate} group={null} />
       <div className="orb" style={{ width:200, height:200, background:'#FDE68A', top:-50, right:-50, opacity:0.5 }} />
       <div className="orb" style={{ width:140, height:140, background:'#BAE6FD', bottom:100, left:-40, opacity:0.4 }} />
 

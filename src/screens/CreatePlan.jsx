@@ -88,7 +88,7 @@ export default function CreatePlan({ navigate }) {
 
   return (
     <div className="phone-shell">
-      <TopBar navigate={navigate} />
+      <TopBar navigate={navigate} group={null} />
       <div className="orb" style={{ width:180, height:180, background:'#FDE68A', top:-50, right:-40, opacity:0.45 }} />
 
       <div className="px-5 pt-4 pb-4 relative z-10">

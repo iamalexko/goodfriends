@@ -1,9 +1,6 @@
 // Shared low-level components used across all screens
 
-import { useAuth } from '../context/AuthContext'
-
-export function TopBar({ navigate }) {
-  const { profile } = useAuth()
+export function TopBar({ navigate, group, memberEmojis }) {
   return (
     <div
       className="sticky top-0 z-50 flex items-center justify-between px-5 border-b border-black/[0.06]"
@@ -24,18 +21,65 @@ export function TopBar({ navigate }) {
       >
         Goodfriends.
       </div>
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-full bg-black/[0.05] flex items-center justify-center">
-          <i className="ti ti-bell text-ink" style={{ fontSize: '13px' }} />
-        </div>
+
+      {group ? (
         <div
-          onClick={() => navigate?.('profile')}
-          className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-base cursor-pointer"
-          style={{ border: '2px solid #FB923C' }}
+          onClick={() => navigate?.('crew')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            background: 'rgba(255,255,255,0.8)',
+            border: '1px solid rgba(0,0,0,0.07)',
+            borderRadius: 999, padding: '5px 10px 5px 6px',
+            cursor: 'pointer',
+          }}
+          aria-label={`${group.name} crew · ${group.avg_attendance ?? '—'}% attendance`}
         >
-          {profile?.emoji || '😎'}
+          {/* Overlapping emoji faces */}
+          <div style={{ display: 'flex' }}>
+            {(memberEmojis || []).slice(0, 4).map((e, i) => (
+              <div
+                key={i}
+                style={{
+                  width: 20, height: 20, borderRadius: '50%',
+                  background: '#f0f0f0', border: '1.5px solid #FFFBF5',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, marginRight: -5, zIndex: 4 - i, position: 'relative',
+                }}
+              >
+                {e}
+              </div>
+            ))}
+          </div>
+
+          {/* Group name */}
+          <span style={{ fontSize: 10, fontWeight: 600, color: '#555', marginLeft: 7 }}>
+            {group.name}
+          </span>
+
+          {/* Divider */}
+          <div style={{ width: 1, height: 12, background: 'rgba(0,0,0,0.1)', margin: '0 2px' }} />
+
+          {/* Green dot + rate */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#34D399' }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#34D399' }}>
+              {group.avg_attendance ? `${group.avg_attendance}%` : '—'}
+            </span>
+          </div>
+
+          <i className="ti ti-chevron-right" style={{ fontSize: 10, color: '#ddd' }} />
         </div>
-      </div>
+      ) : (
+        <div
+          style={{
+            width: 30, height: 30, borderRadius: '50%',
+            background: 'rgba(0,0,0,0.05)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <i className="ti ti-bell" style={{ fontSize: 14, color: '#111' }} />
+        </div>
+      )}
     </div>
   )
 }
