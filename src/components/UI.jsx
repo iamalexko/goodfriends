@@ -100,15 +100,17 @@ export function NavBar({ active, navigate }) {
   )
 }
 
-export function EmojiAvatar({ emoji = '😎', size = 'md', isYou = false, onClick }) {
+// EmojiAvatar intentionally renders no ring of any kind. The only "you"
+// indicator in the app is the dark ring on the current user's race avatar
+// in Crew.jsx — applied inline directly on that element, not here.
+export function EmojiAvatar({ emoji = '😎', size = 'md', onClick }) {
   const sizes = { sm: 'w-8 h-8 text-lg', md: 'w-11 h-11 text-2xl', lg: 'w-14 h-14 text-4xl' }
   return (
     <div
       onClick={onClick}
-      className={`${sizes[size]} rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 relative ${onClick ? 'cursor-pointer' : ''}`}
+      className={`${sizes[size]} rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 ${onClick ? 'cursor-pointer' : ''}`}
     >
       {emoji}
-      {isYou && <div className="absolute inset-[-3px] rounded-full border-[3px] border-primary pointer-events-none" />}
     </div>
   )
 }

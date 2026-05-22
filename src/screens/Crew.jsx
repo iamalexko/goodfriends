@@ -327,7 +327,7 @@ export default function Crew({ navigate }) {
                         background: '#f0f0f0', display: 'flex',
                         alignItems: 'center', justifyContent: 'center',
                         fontSize: 26, flexShrink: 0,
-                        border: m.isYou ? '2.5px solid #FB923C' : '2px solid #e5e7eb',
+                        border: m.isYou ? '2.5px solid #111' : '2px solid #e5e7eb',
                       }}
                     >
                       {m.emoji}
