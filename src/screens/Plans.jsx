@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { NavBar, TopBar, Pill } from '../components/UI'
 
-const TIER_PILL_VARIANT = { 1: 'gold', 2: 'orange', 3: 'neutral' }
+const TIER_PILL_VARIANT = { 1: 'tier1', 2: 'tier2', 3: 'tier3' }
 const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' }
 
 function formatDateTime(dateStr, timeStr) {
@@ -99,11 +99,11 @@ function EmptyUpcoming({ onCreate }) {
       className="glass-card mx-5 mt-3 p-6 flex flex-col items-center text-center gap-2"
     >
       <div className="text-[40px] leading-none">🗓️</div>
-      <div className="font-display font-black italic text-[18px] text-ink">Nothing coming up</div>
+      <div className="font-display font-black text-[18px] text-ink">Nothing coming up</div>
       <div className="text-[12px] text-[#aaa] mb-2">Tap + to create your first plan</div>
       <button
         onClick={onCreate}
-        className="bg-ink text-white rounded-full py-3 px-6 font-display font-black italic"
+        className="bg-ink text-white rounded-full py-3 px-6 font-display font-black"
       >
         Create a plan →
       </button>
@@ -118,7 +118,7 @@ function EmptyPast() {
       className="glass-card mx-5 mt-3 p-6 flex flex-col items-center text-center gap-2"
     >
       <div className="text-[40px] leading-none">📸</div>
-      <div className="font-display font-black italic text-[18px] text-ink">No past plans yet</div>
+      <div className="font-display font-black text-[18px] text-ink">No past plans yet</div>
       <div className="text-[12px] text-[#aaa]">Your history will show up here</div>
     </motion.div>
   )
@@ -193,7 +193,7 @@ export default function Plans({ navigate }) {
 
       {/* Header */}
       <div className="px-5 pt-5 pb-3 relative z-10">
-        <div className="font-display text-[32px] font-black italic text-ink leading-none">Plans.</div>
+        <div className="font-display text-[32px] font-black text-ink leading-none">Plans.</div>
         <p className="text-[12px] text-[#aaa] mt-1">everything you've said yes to</p>
       </div>
 

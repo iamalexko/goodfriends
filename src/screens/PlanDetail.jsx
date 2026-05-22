@@ -20,7 +20,7 @@ function formatTimeAgo(dateStr) {
 }
 
 const TIER_LABEL = { 1: 'Tier 1 · Big deal', 2: 'Tier 2 · Weekend plan', 3: 'Tier 3 · Low-key' }
-const TIER_PILL  = { 1: 'gold', 2: 'orange', 3: 'neutral' }
+const TIER_PILL  = { 1: 'tier1', 2: 'tier2', 3: 'tier3' }
 
 const RSVP_OPTIONS = [
   { key: 'in',     emoji: '✅', label: "I'm in",  sub: '100% there',  bg: 'bg-[#DCFCE7]' },
@@ -535,7 +535,7 @@ export default function PlanDetail({ navigate, planId }) {
             <div style={{ fontSize: 32, marginBottom: 8 }}>📸</div>
             <div style={{
               fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontWeight: 800, fontSize: 15, fontStyle: 'italic',
+              fontWeight: 800, fontSize: 15,
               color: '#111', marginBottom: 4,
             }}>
               No moments yet
@@ -843,7 +843,7 @@ export default function PlanDetail({ navigate, planId }) {
           expanded camera buttons via fileInputRef. */}
       <div
         ref={composerRef}
-        className="fixed bottom-[88px] md:bottom-0 left-0 right-0 md:left-[220px] z-40 px-4 py-3 bg-[rgba(255,251,245,0.95)] backdrop-blur"
+        className="fixed bottom-[calc(68px_+_max(8px,_env(safe-area-inset-bottom)))] md:bottom-0 left-0 right-0 md:left-[220px] z-40 px-4 py-3 bg-[rgba(255,251,245,0.95)] backdrop-blur"
       >
         <input
           type="file"
@@ -1161,7 +1161,7 @@ export default function PlanDetail({ navigate, planId }) {
 
               <div className="flex flex-col items-center text-center pt-4">
                 <div className="text-[48px] leading-none mb-3">🗑️</div>
-                <div className="font-display font-black italic text-[24px] text-ink mb-2">Delete this plan?</div>
+                <div className="font-display font-black text-[24px] text-ink mb-2">Delete this plan?</div>
                 <p className="text-[13px] text-[#aaa] leading-[1.6] mb-6">
                   This removes the plan for everyone in the group. This cannot be undone.
                 </p>
@@ -1174,7 +1174,7 @@ export default function PlanDetail({ navigate, planId }) {
                 <button
                   onClick={deletePlan}
                   disabled={deleting}
-                  className="bg-red-500 text-white rounded-full py-4 w-full font-display font-black italic text-base disabled:opacity-50 mb-2.5"
+                  className="bg-red-500 text-white rounded-full py-4 w-full font-display font-black text-base disabled:opacity-50 mb-2.5"
                 >
                   {deleting ? 'Deleting…' : 'Yes, delete it'}
                 </button>
@@ -1213,7 +1213,7 @@ export default function PlanDetail({ navigate, planId }) {
 
               {/* Header */}
               <div className="px-5 pt-2 pb-3 flex items-center justify-between flex-shrink-0">
-                <div className="font-display font-black italic text-[24px] text-ink">Edit plan.</div>
+                <div className="font-display font-black text-[24px] text-ink">Edit plan.</div>
                 <button
                   onClick={() => !saving && setEditOpen(false)}
                   disabled={saving}
@@ -1323,7 +1323,7 @@ export default function PlanDetail({ navigate, planId }) {
                 <button
                   onClick={saveEdits}
                   disabled={saving || editLoading}
-                  className="w-full py-4 bg-ink text-white rounded-full font-display font-black italic text-base disabled:opacity-50"
+                  className="w-full py-4 bg-ink text-white rounded-full font-display font-black text-base disabled:opacity-50"
                 >
                   {saving ? 'Saving…' : 'Save changes'}
                 </button>

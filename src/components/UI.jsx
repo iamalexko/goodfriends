@@ -22,7 +22,7 @@ export function TopBar({ navigate }) {
           letterSpacing: '-0.3px',
         }}
       >
-        Goodfriends
+        Goodfriends.
       </div>
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-full bg-black/[0.05] flex items-center justify-center">
@@ -75,7 +75,7 @@ export function NavBar({ active, navigate }) {
 
       {/* Desktop sidebar nav */}
       <div className="hidden md:flex fixed left-0 top-0 bottom-0 w-[220px] flex-col gap-1 px-4 py-8 border-r border-black/[0.06] bg-[#FFFBF5] z-50">
-        <div className="font-display text-[20px] font-black italic text-ink mb-8 px-3">Goodfriends.</div>
+        <div className="font-display text-[20px] font-black text-ink mb-8 px-3">Goodfriends.</div>
         {items.map(item => item.fab ? (
           <button
             key="fab"
@@ -114,6 +114,32 @@ export function EmojiAvatar({ emoji = '😎', size = 'md', isYou = false, onClic
 }
 
 export function Pill({ children, variant = 'neutral' }) {
+  // tier1/2/3 use inline styles so we can express the spec's border-or-no-border
+  // requirement cleanly. Other variants stay on Tailwind classes.
+  if (variant === 'tier1') {
+    return (
+      <span className="inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full"
+            style={{ background: '#111111', color: '#ffffff' }}>
+        {children}
+      </span>
+    )
+  }
+  if (variant === 'tier2') {
+    return (
+      <span className="inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full"
+            style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' }}>
+        {children}
+      </span>
+    )
+  }
+  if (variant === 'tier3') {
+    return (
+      <span className="inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full"
+            style={{ background: '#F3F4F6', color: '#aaaaaa' }}>
+        {children}
+      </span>
+    )
+  }
   const variants = {
     gold:    'bg-[#FFFBEB] text-[#78350F]',
     orange:  'bg-primary text-white',

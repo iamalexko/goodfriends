@@ -109,15 +109,31 @@ export default function App() {
 
   if (loading) {
     return (
-      <>
-        {orbs}
-        <div className="phone-shell flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="font-display text-[28px] font-black text-ink">Goodfriends</div>
-            <div className="text-4xl animate-spin">⚡</div>
-          </div>
+      <div
+        style={{
+          width: '100%', minHeight: '100vh',
+          background: '#FFFBF5',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 16,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: '"Plus Jakarta Sans", sans-serif',
+            fontSize: 28, fontWeight: 800,
+            color: '#111', letterSpacing: '-0.5px',
+          }}
+        >
+          Goodfriends.
         </div>
-      </>
+        <div
+          style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: '#FB923C',
+            animation: 'pulse 1.2s ease-in-out infinite',
+          }}
+        />
+      </div>
     )
   }
 

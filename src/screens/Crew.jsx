@@ -226,7 +226,7 @@ export default function Crew({ navigate }) {
                 className="glass-card mx-5 mt-2 mb-4 p-6 flex flex-col items-center text-center gap-2"
               >
                 <div className="text-[44px] leading-none">🏆</div>
-                <div className="font-display font-black italic text-[20px] text-ink">Podium loading…</div>
+                <div className="font-display font-black text-[20px] text-ink">Podium loading…</div>
                 <div className="text-[12px] text-[#aaa]">Close your first plan to start the race</div>
               </motion.div>
             ) : (

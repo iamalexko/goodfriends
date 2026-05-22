@@ -5,9 +5,9 @@ import { useAuth } from '../context/AuthContext'
 import { NavBar, TopBar, BackButton, EmojiAvatar } from '../components/UI'
 
 const TIERS = [
-  { id: 1, emoji: '🎉', label: 'Big deal', desc: 'Special occasion · advance booking · dress up', pts: '3× points · planner bonus', bg: 'bg-[#FFFBEB]', color: 'text-[#92400E]' },
-  { id: 2, emoji: '🌅', label: 'Weekend plan', desc: 'Intentional outing · some coordination needed', pts: '2× points', bg: 'bg-orange-50', color: 'text-primary' },
-  { id: 3, emoji: '☕', label: 'Low-key', desc: 'Casual · spontaneous · low commitment', pts: '1× base points', bg: 'bg-gray-100', color: 'text-gray-400' },
+  { id: 1, emoji: '🎉', label: 'Big deal', desc: 'Special occasion · advance booking · dress up', pts: '3× points · planner bonus', bg: 'bg-[#F5F5F5]', color: 'text-[#111]' },
+  { id: 2, emoji: '🌅', label: 'Weekend plan', desc: 'Intentional outing · some coordination needed', pts: '2× points', bg: 'bg-[#FFFBEB]', color: 'text-[#92400E]' },
+  { id: 3, emoji: '☕', label: 'Low-key', desc: 'Casual · spontaneous · low commitment', pts: '1× base points', bg: 'bg-[#F5F0E8]', color: 'text-[#aaa]' },
 ]
 
 export default function CreatePlan({ navigate }) {
