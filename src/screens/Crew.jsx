@@ -1,19 +1,17 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { NavBar, BackButton, Pill, Divider, StatCell } from '../components/UI'
+import { NavBar, TopBar, BackButton, Pill, Divider, StatCell } from '../components/UI'
 
 // Position-based palette: rank in race determines colour, not name.
-const SLOT_PALETTE = [
-  { gradient: 'linear-gradient(90deg,#FB923C,#FCD34D)', solid: '#FB923C' }, // 1st — orange → gold
-  { gradient: 'linear-gradient(90deg,#818CF8,#A78BFA)', solid: '#818CF8' }, // 2nd — violet → purple
-  { gradient: 'linear-gradient(90deg,#34D399,#6EE7B7)', solid: '#34D399' }, // 3rd — mint → teal
-  { gradient: 'linear-gradient(90deg,#F472B6,#FB7185)', solid: '#F472B6' }, // 4th — pink → rose
-  { gradient: 'linear-gradient(90deg,#94A3B8,#CBD5E1)', solid: '#94A3B8' }, // rest — slate
+const MEMBER_GRADIENTS = [
+  'linear-gradient(90deg,#FB923C,#FCD34D)',
+  'linear-gradient(90deg,#818CF8,#A78BFA)',
+  'linear-gradient(90deg,#34D399,#6EE7B7)',
+  'linear-gradient(90deg,#F472B6,#FB7185)',
+  'linear-gradient(90deg,#60A5FA,#93C5FD)',
 ]
-function paletteFor(index) {
-  return SLOT_PALETTE[Math.min(index, SLOT_PALETTE.length - 1)]
-}
+const MEMBER_COLORS = ['#FB923C', '#818CF8', '#34D399', '#F472B6', '#60A5FA']
 
 const GROUP_EMOJIS = ['🎉','🔥','⚡','🌈','💫','🎯','🎸','🏄','🌴','🍕','☕','🍻','🌊','🎲','🎨','🏔️','🚀','🦊','🐼','🦋','🍣','🎬','📚','🎮','🏀','🏖️','🌮','🍜','🥂','🪩','🎭','🌻']
 
@@ -173,6 +171,7 @@ export default function Crew({ navigate }) {
 
   return (
     <div className="phone-shell">
+      <TopBar navigate={navigate} />
       <div className="orb" style={{ width:200, height:200, background:'#FDE68A', top:-50, right:-50, opacity:0.5 }} />
       <div className="orb" style={{ width:140, height:140, background:'#BAE6FD', bottom:100, left:-40, opacity:0.4 }} />
 
@@ -304,89 +303,114 @@ export default function Crew({ navigate }) {
                   <span className="text-[10px] font-bold text-primary">last 30 days</span>
                 </div>
 
-                {members.map((m, i) => {
-                  const rate = m.score.attendance_rate || 0
-                  const palette = paletteFor(i)
-                  return (
-                    <motion.div
-                      key={m.id}
-                      initial={{ opacity:0, x:-10 }} animate={{ opacity:1, x:0 }} transition={{ delay: i*0.06 }}
-                      className="bg-white/40 rounded-[16px] p-3 mx-5 mb-2 flex items-start gap-3"
+                {members.map((m, i) => (
+                  <div
+                    key={m.id}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 20px', marginBottom: 14 }}
+                  >
+                    {/* Rank */}
+                    <span
+                      style={{
+                        fontFamily: '"Plus Jakarta Sans", sans-serif',
+                        fontSize: 14, fontWeight: 900, width: 16,
+                        textAlign: 'center', flexShrink: 0,
+                        color: i < 3 ? '#FB923C' : '#ccc',
+                      }}
                     >
-                      <span className={`font-display text-[13px] font-extrabold w-4 flex-shrink-0 text-center ${i < 3 ? 'text-primary' : 'text-[#ccc]'}`}>
-                        {i+1}
-                      </span>
+                      {i + 1}
+                    </span>
 
-                      {/* 40px avatar with optional you-ring */}
-                      <div className="relative flex-shrink-0">
-                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl">
-                          {m.emoji}
-                        </div>
+                    {/* Avatar */}
+                    <div
+                      style={{
+                        width: 44, height: 44, borderRadius: '50%',
+                        background: '#f0f0f0', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        fontSize: 26, flexShrink: 0,
+                        border: m.isYou ? '2.5px solid #FB923C' : '2px solid #e5e7eb',
+                      }}
+                    >
+                      {m.emoji}
+                    </div>
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Name + tags row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginBottom: 5 }}>
+                        <span
+                          style={{
+                            fontFamily: '"Plus Jakarta Sans", sans-serif',
+                            fontSize: 14, fontWeight: 800, color: '#111', letterSpacing: '-0.2px',
+                          }}
+                        >
+                          {m.name}
+                        </span>
+
                         {m.isYou && (
-                          <div className="absolute inset-[-3px] rounded-full border-[3px] border-primary pointer-events-none" />
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
                           <span
-                            className="font-display font-extrabold text-[14px] text-ink truncate"
-                            style={{ letterSpacing: '-0.3px' }}
+                            style={{
+                              fontSize: 9, fontWeight: 700, padding: '2px 7px',
+                              borderRadius: 999, background: '#FEF3C7', color: '#92400E',
+                              lineHeight: 1.4, flexShrink: 0,
+                            }}
                           >
-                            {m.name}
+                            You
                           </span>
-                          {m.isYou && (
-                            <span className="bg-[#FEF3C7] text-[#92400E] text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">
-                              you
-                            </span>
-                          )}
-                        </div>
-
-                        {m.tags?.length > 0 && (
-                          <div className="flex gap-1 flex-wrap mt-1 mb-2">
-                            {m.tags.map((t, j) => (
-                              <span
-                                key={j}
-                                className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-                                style={{ background: t.bg, color: t.color }}
-                              >
-                                {t.label}
-                              </span>
-                            ))}
-                          </div>
                         )}
 
-                        <div className="h-2 bg-black/[0.06] rounded-full overflow-hidden relative">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${rate}%` }}
-                            transition={{ delay: i * 0.08, type: 'spring', bounce: 0.4 }}
-                            className="h-full rounded-full relative overflow-hidden"
-                            style={{ background: palette.gradient }}
+                        {getMemberTags(m.score).map(tag => (
+                          <span
+                            key={tag.label}
+                            style={{
+                              fontSize: 9, fontWeight: 700, padding: '2px 7px',
+                              borderRadius: 999, background: tag.bg, color: tag.color,
+                              lineHeight: 1.4, flexShrink: 0,
+                            }}
                           >
-                            {i < 3 && <div className="shimmer" />}
-                          </motion.div>
-                        </div>
-
-                        <div className="flex gap-[2px] mt-1">
-                          {Array.from({ length: 7 }).map((_, j) => (
-                            <div
-                              key={j}
-                              className={`w-[5px] h-[5px] rounded-full ${m.score.streak?.[j] ? 'bg-mint' : 'bg-[#e5e7eb]'}`}
-                            />
-                          ))}
-                        </div>
+                            {tag.label}
+                          </span>
+                        ))}
                       </div>
 
-                      <span
-                        className="font-display font-black text-[15px] flex-shrink-0 text-right"
-                        style={{ color: palette.solid, minWidth: '40px' }}
-                      >
-                        {m.hasScore ? `${rate}%` : '—'}
-                      </span>
-                    </motion.div>
-                  )
-                })}
+                      {/* Bar */}
+                      <div style={{ height: 7, background: 'rgba(0,0,0,0.06)', borderRadius: 999, overflow: 'hidden', marginBottom: 4 }}>
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${m.score?.attendance_rate || 0}%` }}
+                          transition={{ type: 'spring', bounce: 0.3, delay: i * 0.08 }}
+                          style={{
+                            height: '100%', borderRadius: 999,
+                            background: MEMBER_GRADIENTS[i] || 'linear-gradient(90deg,#94A3B8,#CBD5E1)',
+                          }}
+                        />
+                      </div>
+
+                      {/* Streak dots */}
+                      <div style={{ display: 'flex', gap: 3 }}>
+                        {(m.score?.streak || Array(7).fill(false)).slice(0, 7).map((hit, j) => (
+                          <div
+                            key={j}
+                            style={{
+                              width: 5, height: 5, borderRadius: '50%',
+                              background: hit ? '#34D399' : '#e5e7eb',
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Percentage */}
+                    <span
+                      style={{
+                        fontFamily: '"Plus Jakarta Sans", sans-serif',
+                        fontSize: 16, fontWeight: 900, flexShrink: 0, minWidth: 44, textAlign: 'right',
+                        color: MEMBER_COLORS[i] || '#aaa',
+                      }}
+                    >
+                      {m.score?.attendance_rate ? `${m.score.attendance_rate}%` : '—'}
+                    </span>
+                  </div>
+                ))}
               </>
             )}
 

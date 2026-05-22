@@ -1,5 +1,47 @@
 // Shared low-level components used across all screens
 
+import { useAuth } from '../context/AuthContext'
+
+export function TopBar({ navigate }) {
+  const { profile } = useAuth()
+  return (
+    <div
+      className="sticky top-0 z-50 flex items-center justify-between px-5 border-b border-black/[0.06]"
+      style={{
+        background: 'rgba(255,251,245,0.95)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        paddingTop: 'max(12px, env(safe-area-inset-top))',
+        paddingBottom: '12px',
+      }}
+    >
+      <div
+        style={{
+          fontFamily: '"Plus Jakarta Sans", sans-serif',
+          fontSize: '15px',
+          fontWeight: 800,
+          color: '#111',
+          letterSpacing: '-0.3px',
+        }}
+      >
+        Goodfriends
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-full bg-black/[0.05] flex items-center justify-center">
+          <i className="ti ti-bell text-ink" style={{ fontSize: '13px' }} />
+        </div>
+        <div
+          onClick={() => navigate?.('profile')}
+          className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-base cursor-pointer"
+          style={{ border: '2px solid #FB923C' }}
+        >
+          {profile?.emoji || '😎'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function NavBar({ active, navigate }) {
   const items = [
     { id: 'home',    icon: 'ti-home',     label: 'home' },

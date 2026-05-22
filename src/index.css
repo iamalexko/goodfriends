@@ -37,13 +37,15 @@ html, body {
   background: #FFFBF5;
 }
 
-/* Responsive content column — was the fixed 375x812 phone mockup before. */
+/* Responsive content column — was the fixed 375x812 phone mockup before.
+   Background is transparent so the fixed orbs in App.jsx show through;
+   body + #root still paint the cream base underneath. */
 .phone-shell {
   width: 100%;
   max-width: 680px;
   min-height: 100vh;
   margin: 0 auto;
-  background: #FFFBF5;
+  background: transparent;
   border-radius: 0;
   border: none;
   box-shadow: none;

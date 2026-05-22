@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { NavBar, EmojiAvatar, Pill, SectionHeader } from '../components/UI'
+import { NavBar, TopBar, EmojiAvatar, Pill, SectionHeader } from '../components/UI'
 
 const TIER_PILL = { 1: 'gold', 2: 'orange', 3: 'neutral' }
 const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' }
@@ -146,6 +146,7 @@ export default function Home({ navigate }) {
 
   return (
     <div className="phone-shell">
+      <TopBar navigate={navigate} />
       <div className="orb" style={{ width:200, height:200, background:'#FDE68A', top:-50, right:-50, opacity:0.45 }} />
       <div className="orb" style={{ width:140, height:140, background:'#BAE6FD', top:200, left:-40, opacity:0.35 }} />
 
@@ -153,85 +154,61 @@ export default function Home({ navigate }) {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="px-5 pt-5 pb-3 relative z-10"
+        className="px-5 pt-4 pb-3 relative z-10"
       >
         <div className="text-[9px] text-[#bbb] font-medium uppercase tracking-wider mb-1">{day} · Dubai</div>
-        <div className="flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="font-display text-[22px] font-black italic text-ink leading-tight">
-              Hey {firstName} {profile?.emoji || '👋'}
-            </div>
-            {group && (
-              <motion.div
-                whileTap={{ scale: 0.97 }}
-                onClick={() => navigate('crew')}
-                className="cursor-pointer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'rgba(255,255,255,0.72)',
-                  backdropFilter: 'blur(14px)',
-                  WebkitBackdropFilter: 'blur(14px)',
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  borderRadius: '999px',
-                  padding: '5px 10px 5px 6px',
-                  marginTop: '8px',
-                }}
-              >
-                {/* Overlapping emoji faces */}
-                <div style={{ display: 'flex' }}>
-                  {(group.member_emojis || []).slice(0, 4).map((e, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        width: '20px', height: '20px', borderRadius: '50%',
-                        background: '#f3f4f6',
-                        fontSize: '11px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: '1.5px solid #FFFBF5',
-                        marginRight: '-5px',
-                      }}
-                    >
-                      {e}
-                    </div>
-                  ))}
-                  {group.member_count > 4 && (
-                    <div
-                      style={{
-                        width: '20px', height: '20px', borderRadius: '50%',
-                        background: '#f3f4f6',
-                        color: '#aaa',
-                        fontSize: '9px',
-                        fontWeight: 700,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: '1.5px solid #FFFBF5',
-                        marginRight: '-5px',
-                      }}
-                    >
-                      +{group.member_count - 4}
-                    </div>
-                  )}
-                </div>
-
-                <span style={{ fontSize: '10px', fontWeight: 600, color: '#555', marginLeft: '3px' }}>
-                  {group.name}
-                </span>
-
-                <div style={{ width: '1px', height: '12px', background: 'rgba(0,0,0,0.08)', margin: '0 2px' }} />
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#34D399' }} />
-                  <span style={{ fontSize: '9px', fontWeight: 700, color: '#34D399' }}>
-                    {group.avg_attendance ? `${group.avg_attendance}%` : '—'}
-                  </span>
-                </div>
-
-                <i className="ti ti-chevron-right" style={{ fontSize: '10px', color: '#ddd' }} />
-              </motion.div>
-            )}
+        <div className="flex items-center justify-between gap-3">
+          <div className="font-display text-[22px] font-black italic text-ink leading-tight min-w-0 truncate">
+            Hey {firstName} {profile?.emoji || '👋'}
           </div>
-          <EmojiAvatar emoji={profile?.emoji} isYou onClick={() => navigate('profile')} />
+          {group && (
+            <motion.div
+              whileTap={{ scale: 0.97 }}
+              onClick={() => navigate('crew')}
+              className="flex-shrink-0"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                background: 'rgba(255,255,255,0.72)',
+                backdropFilter: 'blur(14px)',
+                WebkitBackdropFilter: 'blur(14px)',
+                border: '1px solid rgba(0,0,0,0.06)',
+                borderRadius: 999,
+                padding: '5px 10px 5px 6px',
+                cursor: 'pointer',
+              }}
+              aria-label={`${group.name} crew · ${group.avg_attendance ?? '—'}% attendance`}
+            >
+              {/* Overlapping emoji faces — first 4 members */}
+              <div style={{ display: 'flex' }}>
+                {(group.member_emojis || []).slice(0, 4).map((e, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: 20, height: 20, borderRadius: '50%',
+                      background: '#f0f0f0', border: '1.5px solid #FFFBF5',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11, marginRight: -5, zIndex: 4 - i,
+                    }}
+                  >
+                    {e}
+                  </div>
+                ))}
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 600, color: '#555', marginLeft: 7 }}>
+                {group.name}
+              </span>
+              <div style={{ width: 1, height: 12, background: 'rgba(0,0,0,0.1)', margin: '0 2px' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#34D399' }} />
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#34D399' }}>
+                  {group.avg_attendance ? `${group.avg_attendance}%` : '—'}
+                </span>
+              </div>
+              <i className="ti ti-chevron-right" style={{ fontSize: 10, color: '#ddd' }} />
+            </motion.div>
+          )}
         </div>
       </motion.div>
 
