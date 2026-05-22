@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Pill, Loader } from '../components/UI'
+import { Pill } from '../components/UI'
 
 const TAG_VARIANTS = ['mint', 'gold', 'neutral']
 const TAGS = ['always shows up', 'big planners', 'rooftop lovers']
@@ -54,7 +54,11 @@ export default function JoinPage({ code }) {
   }
 
   if (previewLoading || authLoading) {
-    return <Loader fullScreen size="lg" />
+    return (
+      <div className="phone-shell flex items-center justify-center">
+        <div className="text-4xl animate-spin">⚡</div>
+      </div>
+    )
   }
 
   if (notFound) {

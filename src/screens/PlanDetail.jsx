@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { NavBar, TopBar, BackButton, Pill, EmojiAvatar, Divider, SectionHeader, Loader } from '../components/UI'
+import { NavBar, TopBar, BackButton, Pill, EmojiAvatar, Divider, SectionHeader } from '../components/UI'
 
 const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶']
 
@@ -423,8 +423,8 @@ export default function PlanDetail({ navigate, planId }) {
   const isOrganiser = plan?.organiser_id === profile?.id
 
   if (loading) return (
-    <div className="phone-shell">
-      <Loader size="lg" />
+    <div className="phone-shell flex items-center justify-center">
+      <div className="text-4xl animate-spin">⚡</div>
     </div>
   )
 
@@ -1227,7 +1227,9 @@ export default function PlanDetail({ navigate, planId }) {
               {/* Scrollable body */}
               <div className="flex-1 overflow-y-auto px-5 pb-3">
                 {editLoading ? (
-                  <Loader />
+                  <div className="flex items-center justify-center py-10">
+                    <div className="text-3xl animate-spin">⚡</div>
+                  </div>
                 ) : (
                   <>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-[#aaa] mb-1.5 block">Plan name</label>

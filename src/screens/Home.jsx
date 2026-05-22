@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { NavBar, TopBar, EmojiAvatar, Pill, SectionHeader, Loader } from '../components/UI'
+import { NavBar, TopBar, EmojiAvatar, Pill, SectionHeader } from '../components/UI'
 
 const TIER_PILL = { 1: 'tier1', 2: 'tier2', 3: 'tier3' }
 const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' }
@@ -225,7 +225,9 @@ export default function Home({ navigate }) {
 
       <div className="scroll-area relative z-10">
         {loading ? (
-          <Loader />
+          <div className="flex items-center justify-center py-20">
+            <div className="text-3xl animate-spin">⚡</div>
+          </div>
         ) : (
           <>
             <SectionHeader>Coming up</SectionHeader>

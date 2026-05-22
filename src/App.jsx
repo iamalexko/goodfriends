@@ -10,7 +10,6 @@ import Profile from './screens/Profile'
 import Summary from './screens/Summary'
 import Plans from './screens/Plans'
 import JoinPage from './screens/JoinPage'
-import { Loader } from './components/UI'
 
 function readInviteFromUrl() {
   try {
@@ -109,7 +108,33 @@ export default function App() {
   }
 
   if (loading) {
-    return <Loader fullScreen size="lg" />
+    return (
+      <div
+        style={{
+          width: '100%', minHeight: '100vh',
+          background: '#FFFBF5',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 16,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: '"Plus Jakarta Sans", sans-serif',
+            fontSize: 28, fontWeight: 800,
+            color: '#111', letterSpacing: '-0.5px',
+          }}
+        >
+          Goodfriends.
+        </div>
+        <div
+          style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: '#FB923C',
+            animation: 'pulse 1.2s ease-in-out infinite',
+          }}
+        />
+      </div>
+    )
   }
 
   // No session → login / sign-up screens

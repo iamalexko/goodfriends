@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { NavBar, TopBar, Pill, Loader } from '../components/UI'
+import { NavBar, TopBar, Pill } from '../components/UI'
 
 const TIER_PILL_VARIANT = { 1: 'tier1', 2: 'tier2', 3: 'tier3' }
 const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' }
@@ -227,7 +227,9 @@ export default function Plans({ navigate }) {
 
       <div className="scroll-area relative z-10 pt-3">
         {loading ? (
-          <Loader />
+          <div className="flex items-center justify-center py-16">
+            <div className="text-3xl animate-spin">⚡</div>
+          </div>
         ) : list.length === 0 ? (
           tab === 'upcoming'
             ? <EmptyUpcoming onCreate={() => navigate('create')} />

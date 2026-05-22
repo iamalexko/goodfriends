@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { NavBar, TopBar, BackButton, Pill, Divider, StatCell, Loader } from '../components/UI'
+import { NavBar, TopBar, BackButton, Pill, Divider, StatCell } from '../components/UI'
 
 // Position-based palette: rank in race determines colour, not name.
 const MEMBER_GRADIENTS = [
@@ -186,7 +186,7 @@ export default function Crew({ navigate }) {
 
       <div className="scroll-area relative z-10">
         {loading ? (
-          <Loader size="lg" />
+          <div className="flex items-center justify-center py-20"><div className="text-4xl animate-spin">⚡</div></div>
         ) : (
           <>
             {/* Group hero */}
