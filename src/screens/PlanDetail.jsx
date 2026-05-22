@@ -1,0 +1,1030 @@
+import { useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { X } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
+import { NavBar, BackButton, Pill, EmojiAvatar, Divider, SectionHeader } from '../components/UI'
+
+const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶']
+
+function ReactionBar({ postId, grouped, myReaction, pickerOpen, onOpenPicker, onClosePicker, onToggle }) {
+  // Show up to 3 unique emojis, then a + button to open the picker.
+  const visible = grouped.slice(0, 3)
+  return (
+    <div className="flex items-center gap-1 relative">
+      {visible.map(([emoji, count]) => {
+        const isMine = myReaction?.emoji === emoji
+        return (
+          <button
+            key={emoji}
+            onClick={() => onToggle(postId, emoji)}
+            className={`rounded-full px-2 py-0.5 text-[12px] flex items-center gap-1 transition-colors ${isMine ? 'bg-[#FEF3C7] border border-[#FCD34D]' : 'bg-white/80 border border-black/[0.04]'}`}
+          >
+            <span>{emoji}</span>
+            <span className="text-[10px] text-[#666] font-semibold">{count}</span>
+          </button>
+        )
+      })}
+      <button
+        onClick={() => pickerOpen ? onClosePicker() : onOpenPicker()}
+        aria-label="Add reaction"
+        className="w-6 h-6 rounded-full bg-white/80 border border-black/[0.04] flex items-center justify-center text-[#aaa] text-[12px]"
+      >
+        +
+      </button>
+      <AnimatePresence>
+        {pickerOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 4, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            className="absolute bottom-full mb-1.5 left-0 z-20 bg-white rounded-full shadow-lg border border-black/[0.06] px-2 py-1.5 flex items-center gap-1"
+          >
+            {REACTION_OPTIONS.map(e => (
+              <button
+                key={e}
+                onClick={() => onToggle(postId, e)}
+                className="text-[20px] leading-none w-7 h-7 flex items-center justify-center rounded-full hover:bg-black/5 active:scale-95 transition-transform"
+              >
+                {e}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function relativeTime(iso) {
+  if (!iso) return ''
+  const t = new Date(iso).getTime()
+  const diff = Date.now() - t
+  if (isNaN(diff)) return ''
+  const s = Math.round(diff / 1000)
+  if (s < 60) return 'just now'
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.round(h / 24)
+  if (d < 7) return `${d}d ago`
+  return new Date(iso).toLocaleDateString('en-AE', { day: 'numeric', month: 'short' })
+}
+
+const TIER_LABEL = { 1: 'Tier 1 · Big deal', 2: 'Tier 2 · Weekend plan', 3: 'Tier 3 · Low-key' }
+const TIER_PILL  = { 1: 'gold', 2: 'orange', 3: 'neutral' }
+
+const RSVP_OPTIONS = [
+  { key: 'in',     emoji: '✅', label: "I'm in",  sub: '100% there',  bg: 'bg-[#DCFCE7]' },
+  { key: 'likely', emoji: '🤔', label: 'Likely',   sub: 'pretty sure', bg: 'bg-[#FEF3C7]' },
+  { key: 'maybe',  emoji: '🌀', label: 'Maybe',    sub: 'not sure yet', bg: 'bg-gray-50'   },
+]
+
+const RSVP_PILL = { in: 'mint', likely: 'yellow', maybe: 'neutral', null: 'neutral' }
+const RSVP_LABEL = { in: "I'm in", likely: 'Likely', maybe: 'Maybe' }
+
+export default function PlanDetail({ navigate, planId }) {
+  const { profile } = useAuth()
+  const [plan, setPlan] = useState(null)
+  const [rsvps, setRsvps] = useState([])
+  const [myRsvp, setMyRsvp] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [closing, setClosing] = useState(false)
+  const [attendance, setAttendance] = useState({})
+
+  // Edit sheet state
+  const [editOpen, setEditOpen] = useState(false)
+  const [editLoading, setEditLoading] = useState(false)
+  const [editForm, setEditForm] = useState({ name: '', date: '', time: '', location: '', notes: '' })
+  const [editMembers, setEditMembers] = useState([])
+  const [originalInvited, setOriginalInvited] = useState(new Set())
+  const [invited, setInvited] = useState(new Set())
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [toastVisible, setToastVisible] = useState(false)
+
+  // Delete sheet state
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const [deletedToastVisible, setDeletedToastVisible] = useState(false)
+
+  // Moments feed state
+  const [posts, setPosts] = useState([])
+  const [comment, setComment] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [editingPost, setEditingPost] = useState(null) // { id, content }
+  const [actionSheetPost, setActionSheetPost] = useState(null) // post being acted on
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState(null)
+  const [reactionPickerPostId, setReactionPickerPostId] = useState(null)
+  const [currentUserId, setCurrentUserId] = useState(null)
+  const fileInputRef = useRef(null)
+  const commentInputRef = useRef(null)
+
+  useEffect(() => { loadPlan() }, [planId])
+
+  useEffect(() => {
+    if (!planId) return
+    loadPosts()
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id || null))
+    const channel = supabase
+      .channel('posts-' + planId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts', filter: `plan_id=eq.${planId}` }, loadPosts)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, loadPosts)
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planId])
+
+  async function loadPosts() {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*, profiles(display_name, emoji), reactions(id, emoji, user_id)')
+      .eq('plan_id', planId)
+      .order('created_at', { ascending: true })
+    if (error) { console.error('PlanDetail: failed to load posts', error); return }
+    setPosts(data || [])
+  }
+
+  async function uploadPhoto(file) {
+    if (!file) return
+    setUploading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setUploading(false); return }
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+    const path = `${user.id}/${planId}-${Date.now()}.${ext}`
+
+    const { error: upErr } = await supabase.storage.from('plan-photos').upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type || undefined,
+    })
+    if (upErr) {
+      console.error('PlanDetail: photo upload failed', upErr)
+      setUploading(false)
+      return
+    }
+    const { data: { publicUrl } } = supabase.storage.from('plan-photos').getPublicUrl(path)
+    const { error: insErr } = await supabase.from('posts').insert({
+      plan_id: planId,
+      user_id: user.id,
+      type: 'photo',
+      image_url: publicUrl,
+    })
+    if (insErr) console.error('PlanDetail: photo post insert failed', insErr)
+    setUploading(false)
+    loadPosts()
+  }
+
+  function onPickPhoto(e) {
+    const file = e.target.files?.[0]
+    if (file) uploadPhoto(file)
+    e.target.value = '' // allow re-selecting the same file
+  }
+
+  async function submitComment() {
+    const text = comment.trim()
+    if (!text) return
+    if (editingPost) {
+      const { error } = await supabase.from('posts').update({ content: text }).eq('id', editingPost.id)
+      if (error) { console.error('PlanDetail: edit comment failed', error); return }
+      setEditingPost(null)
+    } else {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { error } = await supabase.from('posts').insert({
+        plan_id: planId,
+        user_id: user.id,
+        type: 'comment',
+        content: text,
+      })
+      if (error) { console.error('PlanDetail: insert comment failed', error); return }
+    }
+    setComment('')
+    loadPosts()
+  }
+
+  function startEditing(post) {
+    setActionSheetPost(null)
+    setEditingPost({ id: post.id, content: post.content || '' })
+    setComment(post.content || '')
+    setTimeout(() => commentInputRef.current?.focus(), 50)
+  }
+
+  function cancelEditing() {
+    setEditingPost(null)
+    setComment('')
+  }
+
+  async function toggleReaction(postId, emoji) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const post = posts.find(p => p.id === postId)
+    const existing = post?.reactions?.find(r => r.user_id === user.id)
+    if (existing) {
+      // If clicking the SAME emoji, remove. Otherwise swap (delete + insert).
+      const { error } = await supabase.from('reactions').delete().eq('id', existing.id)
+      if (error) { console.error('toggleReaction delete', error); return }
+      if (existing.emoji === emoji) { setReactionPickerPostId(null); loadPosts(); return }
+    }
+    const { error: insErr } = await supabase.from('reactions').insert({
+      post_id: postId, user_id: user.id, emoji,
+    })
+    if (insErr) console.error('toggleReaction insert', insErr)
+    setReactionPickerPostId(null)
+    loadPosts()
+  }
+
+  async function performDeletePost(post) {
+    if (post.type === 'photo' && post.image_url) {
+      const path = post.image_url.split('/plan-photos/')[1]
+      if (path) await supabase.storage.from('plan-photos').remove([path])
+    }
+    const { error } = await supabase.from('posts').delete().eq('id', post.id)
+    if (error) { console.error('PlanDetail: delete post failed', error); return }
+    setConfirmingDeleteId(null)
+    if (editingPost?.id === post.id) cancelEditing()
+    loadPosts()
+  }
+
+  function groupReactionsByEmoji(reactions) {
+    const map = new Map()
+    ;(reactions || []).forEach(r => {
+      map.set(r.emoji, (map.get(r.emoji) || 0) + 1)
+    })
+    return [...map.entries()]
+  }
+
+  async function loadPlan() {
+    if (!planId) { setLoading(false); return }
+    const { data: planData } = await supabase
+      .from('plans').select('*, profiles!organiser_id(display_name, emoji)').eq('id', planId).single()
+    if (planData) setPlan(planData)
+
+    const { data: rsvpData } = await supabase
+      .from('rsvps').select('*, profiles(display_name, emoji, id)')
+      .eq('plan_id', planId)
+    if (rsvpData) {
+      setRsvps(rsvpData)
+      const { data: { user } } = await supabase.auth.getUser()
+      const mine = rsvpData.find(r => r.user_id === user.id)
+      setMyRsvp(mine?.status || null)
+      const att = {}
+      rsvpData.forEach(r => { att[r.user_id] = r.status === 'in' })
+      setAttendance(att)
+    }
+    setLoading(false)
+  }
+
+  async function setRsvpStatus(status) {
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('rsvps').upsert({ plan_id: planId, user_id: user.id, status })
+    setMyRsvp(status)
+  }
+
+  async function openEditSheet() {
+    setSaveError('')
+    setEditForm({
+      name: plan?.name || '',
+      date: plan?.date || '',
+      time: plan?.time || '',
+      location: plan?.location || '',
+      notes: plan?.notes || '',
+    })
+    setEditOpen(true)
+    setEditLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: mem, error } = await supabase
+      .from('group_members')
+      .select('user_id, profiles(id, display_name, emoji), joined_at')
+      .eq('group_id', plan.group_id)
+      .order('joined_at', { ascending: true })
+    if (error) { console.error('PlanDetail: failed to load members for edit', error) }
+    const members = (mem || []).map(m => ({
+      id: m.user_id,
+      name: m.profiles?.display_name || 'Friend',
+      emoji: m.profiles?.emoji || '😎',
+      isMe: m.user_id === user.id,
+    }))
+    setEditMembers(members)
+    const invitedIds = new Set(rsvps.map(r => r.user_id))
+    setOriginalInvited(invitedIds)
+    setInvited(new Set(invitedIds))
+    setEditLoading(false)
+  }
+
+  function toggleInvite(userId, isMe) {
+    if (isMe) return
+    setInvited(prev => {
+      const next = new Set(prev)
+      if (next.has(userId)) next.delete(userId)
+      else next.add(userId)
+      return next
+    })
+  }
+
+  async function deletePlan() {
+    setDeleteError('')
+    setDeleting(true)
+
+    // Order matters: child rows first (rsvps + attendances), then the plan itself.
+    // Even with ON DELETE CASCADE on the FKs we issue these explicitly so RLS
+    // failures on child tables surface as a clear error instead of cascading silently.
+    const { error: rsvpErr } = await supabase.from('rsvps').delete().eq('plan_id', planId)
+    if (rsvpErr) { setDeleteError(rsvpErr.message); setDeleting(false); return }
+
+    const { error: attErr } = await supabase.from('attendances').delete().eq('plan_id', planId)
+    if (attErr) { setDeleteError(attErr.message); setDeleting(false); return }
+
+    const { error: planErr } = await supabase.from('plans').delete().eq('id', planId)
+    if (planErr) { setDeleteError(planErr.message); setDeleting(false); return }
+
+    setDeleting(false)
+    setDeleteOpen(false)
+    setDeletedToastVisible(true)
+    setTimeout(() => {
+      setDeletedToastVisible(false)
+      navigate('plans')
+    }, 2000)
+  }
+
+  async function saveEdits() {
+    if (!editForm.name.trim()) { setSaveError('Plan name is required'); return }
+    if (!editForm.date) { setSaveError('Pick a date'); return }
+    setSaving(true)
+    setSaveError('')
+
+    const { error: planErr } = await supabase
+      .from('plans')
+      .update({
+        name: editForm.name.trim(),
+        date: editForm.date,
+        time: editForm.time,
+        location: editForm.location,
+        notes: editForm.notes,
+      })
+      .eq('id', planId)
+    if (planErr) { setSaveError(planErr.message); setSaving(false); return }
+
+    const toAdd = [...invited].filter(id => !originalInvited.has(id))
+    const toRemove = [...originalInvited].filter(id => !invited.has(id))
+
+    if (toAdd.length > 0) {
+      const rows = toAdd.map(userId => ({ plan_id: planId, user_id: userId, status: null }))
+      const { error: addErr } = await supabase.from('rsvps').insert(rows)
+      if (addErr) { setSaveError(addErr.message); setSaving(false); return }
+    }
+    if (toRemove.length > 0) {
+      const { error: rmErr } = await supabase
+        .from('rsvps').delete().eq('plan_id', planId).in('user_id', toRemove)
+      if (rmErr) { setSaveError(rmErr.message); setSaving(false); return }
+    }
+
+    setSaving(false)
+    setEditOpen(false)
+    setToastVisible(true)
+    setTimeout(() => setToastVisible(false), 2000)
+    await loadPlan()
+  }
+
+  async function closeEvent() {
+    setClosing(true)
+
+    const rows = Object.entries(attendance).map(([userId, came]) => ({
+      plan_id: planId, user_id: userId, came,
+    }))
+    await supabase.from('attendances').upsert(rows)
+
+    await supabase.from('plans').update({ status: 'closed' }).eq('id', planId)
+
+    const multiplier = plan?.tier || 1
+    const attended = Object.entries(attendance).filter(([_, came]) => came)
+    for (const [userId] of attended) {
+      await supabase.rpc('add_points', { p_user_id: userId, p_group_id: plan.group_id, p_points: multiplier * 10 })
+    }
+
+    // Recalculate attendance_rate / plans_organised / streak for every member
+    // whose attendance was recorded (attended OR didn't), so the Crew leaderboard
+    // reflects the close.
+    const everyone = Object.keys(attendance)
+    await Promise.all(everyone.map(userId =>
+      supabase.rpc('recalculate_member_score', { p_user_id: userId, p_group_id: plan.group_id })
+    ))
+
+    setClosing(false)
+    navigate('home')
+  }
+
+  const { data: { user: currentUser } } = { data: { user: null } }
+  const isOrganiser = plan?.organiser_id === profile?.id
+
+  if (loading) return (
+    <div className="phone-shell flex items-center justify-center">
+      <div className="text-4xl animate-spin">⚡</div>
+    </div>
+  )
+
+  if (!plan) return (
+    <div className="phone-shell flex flex-col">
+      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center gap-4">
+        <div className="text-5xl">📭</div>
+        <div className="font-display font-black text-[22px] text-ink">No plan selected</div>
+        <p className="text-[13px] text-[#aaa]">Go back to your home feed to pick a plan.</p>
+        <button onClick={() => navigate('home')} className="px-6 py-3 bg-ink text-white rounded-full font-semibold text-sm">Back home</button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="phone-shell">
+      <div className="orb" style={{ width:180, height:180, background:'#FDE68A', top:-50, right:-40, opacity:0.45 }} />
+      <div className="orb" style={{ width:120, height:120, background:'#BAE6FD', top:200, left:-30, opacity:0.35 }} />
+
+      <div className="px-5 pt-4 pb-3 relative z-10">
+        <div className="flex items-center gap-3 mb-4">
+          <BackButton onClick={() => navigate('home')} />
+          <Pill variant={TIER_PILL[plan.tier]}>{TIER_LABEL[plan.tier]}</Pill>
+        </div>
+        <div className="flex items-start gap-2 mb-2">
+          <div className="font-display text-[28px] font-black text-ink leading-tight flex-1 min-w-0">{plan.name}</div>
+          {isOrganiser && plan.status === 'open' && (
+            <button
+              onClick={openEditSheet}
+              aria-label="Edit plan"
+              className="w-8 h-8 rounded-full bg-black/5 flex items-center justify-center flex-shrink-0 mt-1 active:scale-95 transition-transform"
+            >
+              <i className="ti ti-pencil text-ink text-base" />
+            </button>
+          )}
+          {isOrganiser && (plan.status === 'open' || plan.status === 'closed') && (
+            <button
+              onClick={() => { setDeleteError(''); setDeleteOpen(true) }}
+              aria-label="Delete plan"
+              className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 mt-1 active:scale-95 transition-transform"
+            >
+              <i className="ti ti-trash text-red-400 text-base" />
+            </button>
+          )}
+        </div>
+        {plan.date && (
+          <div className="flex items-center gap-1.5 text-[12px] text-[#aaa] mb-1">
+            <i className="ti ti-calendar text-[13px]" />
+            {new Date(plan.date).toLocaleDateString('en-AE', { weekday:'short', day:'numeric', month:'short' })}
+            {plan.time && ` · ${plan.time}`}
+            {plan.location && ` · ${plan.location}`}
+          </div>
+        )}
+        {plan.profiles && (
+          <div className="flex items-center gap-1.5 text-[12px] text-[#aaa]">
+            <i className="ti ti-user text-[13px]" />
+            Planned by <span className="text-primary font-bold ml-0.5">{plan.profiles.display_name}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="scroll-area relative z-10">
+        {/* RSVP */}
+        <SectionHeader>Your RSVP</SectionHeader>
+        <div className="grid grid-cols-3 gap-2 px-5 mb-4">
+          {RSVP_OPTIONS.map(opt => (
+            <motion.button
+              key={opt.key}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setRsvpStatus(opt.key)}
+              className={`${opt.bg} rounded-[14px] p-3 text-center border-2 transition-all ${myRsvp === opt.key ? 'border-ink' : 'border-transparent'}`}
+            >
+              <div className="text-[24px] mb-1">{opt.emoji}</div>
+              <div className="font-display font-extrabold text-[12px] text-ink">{opt.label}</div>
+              <div className="text-[10px] text-[#aaa] mt-0.5">{opt.sub}</div>
+            </motion.button>
+          ))}
+        </div>
+
+        <Divider />
+
+        {/* Attendees */}
+        <SectionHeader>The crew</SectionHeader>
+        {rsvps.map((r, i) => (
+          <motion.div
+            key={r.user_id}
+            initial={{ opacity:0, x:-8 }} animate={{ opacity:1, x:0 }} transition={{ delay: i*0.04 }}
+            className="flex items-center gap-2.5 px-5 py-2"
+          >
+            <EmojiAvatar emoji={r.profiles?.emoji} size="sm" />
+            <span className="flex-1 text-[13px] font-semibold text-ink">{r.profiles?.display_name}</span>
+            {r.status
+              ? <Pill variant={RSVP_PILL[r.status]}>{RSVP_LABEL[r.status]}</Pill>
+              : <Pill variant="neutral">No reply</Pill>
+            }
+          </motion.div>
+        ))}
+
+        {/* Moments */}
+        <Divider />
+        <div className="flex items-center justify-between px-5 mt-3 mb-3">
+          <span className="text-[10px] font-bold tracking-widest uppercase text-[#bbb]">Moments</span>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            aria-label="Add photo"
+            className="w-[30px] h-[30px] rounded-full bg-black/5 flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
+          >
+            <i className="ti ti-camera text-ink text-sm" />
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={onPickPhoto}
+        />
+
+        {posts.length === 0 && !uploading && (
+          <div className="flex flex-col items-center text-center px-5 py-6">
+            <div className="text-[32px] leading-none mb-2">📸</div>
+            <div className="font-display font-extrabold italic text-[15px] text-ink">No moments yet</div>
+            <div className="text-[12px] text-[#aaa] mt-1">Be the first to add a photo or comment</div>
+          </div>
+        )}
+
+        {uploading && (
+          <div className="mx-5 mb-3 rounded-[16px] bg-gray-100 aspect-square flex items-center justify-center">
+            <i className="ti ti-loader-2 animate-spin text-[#aaa] text-2xl" />
+          </div>
+        )}
+
+        {posts.map(post => {
+          const isOwn = currentUserId && post.user_id === currentUserId
+          const isConfirmingDelete = confirmingDeleteId === post.id
+          const grouped = groupReactionsByEmoji(post.reactions)
+          const myReaction = post.reactions?.find(r => r.user_id === currentUserId)
+
+          if (isConfirmingDelete) {
+            return (
+              <motion.div
+                key={post.id}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                className="mx-5 mb-2 rounded-[16px] bg-red-50 border border-red-100 px-4 py-3 flex items-center justify-between gap-3"
+              >
+                <span className="text-[13px] font-semibold text-red-600 flex-1">
+                  Delete this {post.type === 'photo' ? 'photo' : 'comment'}?
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => performDeletePost(post)}
+                    className="text-[12px] font-bold text-red-600 px-3 py-1.5 rounded-full bg-white"
+                  >
+                    Yes, delete
+                  </button>
+                  <button
+                    onClick={() => setConfirmingDeleteId(null)}
+                    className="text-[12px] font-semibold text-[#aaa] px-3 py-1.5"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
+            )
+          }
+
+          if (post.type === 'photo') {
+            return (
+              <div key={post.id} className="mx-5 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-base flex-shrink-0">
+                    {post.profiles?.emoji || '😎'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-display font-extrabold italic text-[13px] text-ink">{post.profiles?.display_name || 'Friend'}</span>
+                    <span className="text-[11px] text-[#aaa]"> · {relativeTime(post.created_at)}</span>
+                  </div>
+                  {isOwn && (
+                    <button
+                      onClick={() => setActionSheetPost(post)}
+                      aria-label="Post actions"
+                      className="w-7 h-7 rounded-full flex items-center justify-center"
+                    >
+                      <i className="ti ti-dots text-[#ccc] text-base" />
+                    </button>
+                  )}
+                </div>
+                <motion.img
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+                  src={post.image_url}
+                  alt=""
+                  className="w-full rounded-[16px] max-h-64 object-cover"
+                />
+                <ReactionBar
+                  postId={post.id}
+                  grouped={grouped}
+                  myReaction={myReaction}
+                  pickerOpen={reactionPickerPostId === post.id}
+                  onOpenPicker={() => setReactionPickerPostId(post.id)}
+                  onClosePicker={() => setReactionPickerPostId(null)}
+                  onToggle={toggleReaction}
+                />
+              </div>
+            )
+          }
+
+          // Comment
+          return (
+            <div key={post.id} className="mx-5 mb-2 bg-white/60 backdrop-blur rounded-[16px] px-3 py-2.5">
+              <div className="flex items-start gap-2">
+                <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-base flex-shrink-0 mt-0.5">
+                  {post.profiles?.emoji || '😎'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-display font-extrabold italic text-[13px] text-ink">{post.profiles?.display_name || 'Friend'}</span>
+                    {isOwn && (
+                      <button
+                        onClick={() => setActionSheetPost(post)}
+                        aria-label="Post actions"
+                        className="w-7 h-7 rounded-full flex items-center justify-center -my-1"
+                      >
+                        <i className="ti ti-dots text-[#ccc] text-base" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[13px] text-ink leading-snug mt-0.5 whitespace-pre-wrap break-words">{post.content}</p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-[10px] text-[#aaa]">{relativeTime(post.created_at)}</span>
+                    <ReactionBar
+                      postId={post.id}
+                      grouped={grouped}
+                      myReaction={myReaction}
+                      pickerOpen={reactionPickerPostId === post.id}
+                      onOpenPicker={() => setReactionPickerPostId(post.id)}
+                      onClosePicker={() => setReactionPickerPostId(null)}
+                      onToggle={toggleReaction}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Close event (organiser only) */}
+        {plan.status === 'open' && isOrganiser && (
+          <>
+            <Divider />
+            <div className="px-5 py-4">
+              <p className="text-[11px] text-[#aaa] mb-3">Mark who actually came — scores update automatically.</p>
+              {rsvps.map(r => (
+                <div key={r.user_id} className="flex items-center gap-2.5 py-2 border-b border-black/[0.04]">
+                  <EmojiAvatar emoji={r.profiles?.emoji} size="sm" />
+                  <span className="flex-1 text-[13px] font-semibold text-ink">{r.profiles?.display_name}</span>
+                  <button
+                    onClick={() => setAttendance(p => ({...p, [r.user_id]: !p[r.user_id]}))}
+                    className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${attendance[r.user_id] ? 'bg-mint border-mint' : 'border-[#ddd]'}`}
+                  >
+                    {attendance[r.user_id] && <i className="ti ti-check text-white text-xs" />}
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={closeEvent}
+                disabled={closing}
+                className="w-full py-4 bg-ink text-white rounded-full font-display font-black text-base mt-4 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <i className="ti ti-check text-lg" />
+                {closing ? 'Closing…' : 'Close event & record attendance'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {plan.status === 'closed' && (
+          <div className="mx-5 mt-4 bg-[#DCFCE7] rounded-[18px] p-4 flex items-center gap-3">
+            <div className="text-2xl">✅</div>
+            <div>
+              <div className="font-display font-extrabold text-[14px] text-[#166534]">Plan closed</div>
+              <div className="text-[11px] text-[#166534]/70 mt-0.5">Attendance recorded · scores updated</div>
+            </div>
+          </div>
+        )}
+
+        <div className="h-6" />
+      </div>
+
+      {/* Comment input — sits above the nav bar, outside the scroll area */}
+      <div className="px-4 py-2.5 border-t border-black/[0.04] bg-[rgba(255,251,245,0.95)] backdrop-blur z-20">
+        {editingPost && (
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span className="text-[11px] text-primary font-semibold">Editing…</span>
+            <button onClick={cancelEditing} className="text-[#aaa] -mr-1 p-1" aria-label="Cancel editing">
+              <X size={14} strokeWidth={2.5} />
+            </button>
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-base flex-shrink-0">
+            {profile?.emoji || '😎'}
+          </div>
+          <input
+            ref={commentInputRef}
+            type="text"
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitComment() } }}
+            placeholder="Add a moment…"
+            className="flex-1 bg-white/80 backdrop-blur border border-black/10 rounded-full px-4 py-2.5 text-[13px] outline-none focus:border-primary"
+          />
+          <button
+            onClick={submitComment}
+            disabled={!comment.trim()}
+            aria-label={editingPost ? 'Save edit' : 'Send comment'}
+            className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${comment.trim() ? 'bg-ink' : 'bg-[#eee]'}`}
+          >
+            <i className={`ti ti-arrow-up text-base ${comment.trim() ? 'text-white' : 'text-[#bbb]'}`} />
+          </button>
+        </div>
+      </div>
+
+      <NavBar active="plans" navigate={navigate} />
+
+      {/* Success toast (edit) */}
+      <AnimatePresence>
+        {toastVisible && (
+          <motion.div
+            key="toast"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: [1, 1, 0], y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 2, times: [0, 0.7, 1] }}
+            className="absolute bottom-[88px] left-1/2 -translate-x-1/2 bg-ink text-white px-4 py-2 rounded-full text-[12px] font-semibold z-40 shadow-lg whitespace-nowrap"
+          >
+            Changes saved ✓
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Deleted toast */}
+      <AnimatePresence>
+        {deletedToastVisible && (
+          <motion.div
+            key="deleted-toast"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: [1, 1, 0], y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 2, times: [0, 0.7, 1] }}
+            className="absolute bottom-[88px] left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-full text-[12px] font-semibold z-40 shadow-lg whitespace-nowrap"
+          >
+            Plan deleted
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Post action sheet — Edit/Delete for own comments, Delete-only for own photos */}
+      <AnimatePresence>
+        {actionSheetPost && (
+          <motion.div
+            key="post-action-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setActionSheetPost(null)}
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+          >
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#FFFBF5] w-full rounded-t-[32px] pb-6"
+            >
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-8 h-1 rounded-full bg-black/10" />
+              </div>
+              <div className="px-2 pt-2">
+                {actionSheetPost.type === 'comment' && (
+                  <button
+                    onClick={() => startEditing(actionSheetPost)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl active:bg-black/[0.04]"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-black/5 flex items-center justify-center">
+                      <i className="ti ti-pencil text-ink text-base" />
+                    </div>
+                    <span className="text-[14px] font-semibold text-ink">Edit comment</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setConfirmingDeleteId(actionSheetPost.id)
+                    setActionSheetPost(null)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl active:bg-red-50"
+                >
+                  <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center">
+                    <i className="ti ti-trash text-red-400 text-base" />
+                  </div>
+                  <span className="text-[14px] font-semibold text-red-500">
+                    {actionSheetPost.type === 'photo' ? 'Delete photo' : 'Delete'}
+                  </span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete confirmation sheet */}
+      <AnimatePresence>
+        {deleteOpen && (
+          <motion.div
+            key="delete-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => !deleting && setDeleteOpen(false)}
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+          >
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#FFFBF5] w-full rounded-t-[32px] flex flex-col px-5 pb-6"
+            >
+              {/* Drag handle */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-8 h-1 rounded-full bg-black/10" />
+              </div>
+
+              <div className="flex flex-col items-center text-center pt-4">
+                <div className="text-[48px] leading-none mb-3">🗑️</div>
+                <div className="font-display font-black italic text-[24px] text-ink mb-2">Delete this plan?</div>
+                <p className="text-[13px] text-[#aaa] leading-[1.6] mb-6">
+                  This removes the plan for everyone in the group. This cannot be undone.
+                </p>
+                <span className="bg-gray-100 text-ink font-bold text-[13px] px-4 py-2 rounded-full mb-6 max-w-full truncate">
+                  {plan.name}
+                </span>
+                {deleteError && (
+                  <p className="text-red-500 text-xs mb-3">{deleteError}</p>
+                )}
+                <button
+                  onClick={deletePlan}
+                  disabled={deleting}
+                  className="bg-red-500 text-white rounded-full py-4 w-full font-display font-black italic text-base disabled:opacity-50 mb-2.5"
+                >
+                  {deleting ? 'Deleting…' : 'Yes, delete it'}
+                </button>
+                <button
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={deleting}
+                  className="bg-transparent text-[#aaa] border border-black/10 rounded-full py-3.5 w-full text-[13px] font-semibold disabled:opacity-50"
+                >
+                  Keep it
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit sheet */}
+      <AnimatePresence>
+        {editOpen && (
+          <motion.div
+            key="edit-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => !saving && setEditOpen(false)}
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+          >
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#FFFBF5] w-full rounded-t-[32px] max-h-[88%] flex flex-col"
+            >
+              {/* Drag handle */}
+              <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className="w-8 h-1 rounded-full bg-black/10" />
+              </div>
+
+              {/* Header */}
+              <div className="px-5 pt-2 pb-3 flex items-center justify-between flex-shrink-0">
+                <div className="font-display font-black italic text-[24px] text-ink">Edit plan.</div>
+                <button
+                  onClick={() => !saving && setEditOpen(false)}
+                  disabled={saving}
+                  aria-label="Close"
+                  className="w-9 h-9 rounded-full bg-black/5 flex items-center justify-center disabled:opacity-50"
+                >
+                  <X size={16} strokeWidth={2.5} className="text-ink" />
+                </button>
+              </div>
+
+              {/* Scrollable body */}
+              <div className="flex-1 overflow-y-auto px-5 pb-3">
+                {editLoading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <div className="text-3xl animate-spin">⚡</div>
+                  </div>
+                ) : (
+                  <>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-[#aaa] mb-1.5 block">Plan name</label>
+                    <input
+                      className="w-full px-4 py-3.5 rounded-2xl border border-black/10 bg-white/80 text-ink text-[14px] outline-none focus:border-primary mb-3"
+                      type="text"
+                      value={editForm.name}
+                      onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+                    />
+
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-[#aaa] mb-1.5 block">Date</label>
+                    <input
+                      className="w-full px-4 py-3.5 rounded-2xl border border-black/10 bg-white/80 text-ink text-[14px] outline-none focus:border-primary mb-3"
+                      type="date"
+                      value={editForm.date || ''}
+                      onChange={e => setEditForm(p => ({ ...p, date: e.target.value }))}
+                    />
+
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-[#aaa] mb-1.5 block">Time</label>
+                    <input
+                      className="w-full px-4 py-3.5 rounded-2xl border border-black/10 bg-white/80 text-ink text-[14px] outline-none focus:border-primary mb-3"
+                      type="time"
+                      value={editForm.time || ''}
+                      onChange={e => setEditForm(p => ({ ...p, time: e.target.value }))}
+                    />
+
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-[#aaa] mb-1.5 block">Location</label>
+                    <input
+                      className="w-full px-4 py-3.5 rounded-2xl border border-black/10 bg-white/80 text-ink text-[14px] outline-none focus:border-primary mb-3"
+                      type="text"
+                      placeholder="Venue or area"
+                      value={editForm.location || ''}
+                      onChange={e => setEditForm(p => ({ ...p, location: e.target.value }))}
+                    />
+
+                    {plan.tier === 1 && (
+                      <>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-[#aaa] mb-1.5 block">Notes / booking ref</label>
+                        <input
+                          className="w-full px-4 py-3.5 rounded-2xl border border-black/10 bg-white/80 text-ink text-[14px] outline-none focus:border-primary mb-3"
+                          type="text"
+                          placeholder="Optional"
+                          value={editForm.notes || ''}
+                          onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
+                        />
+                      </>
+                    )}
+
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-[#aaa] mt-2 mb-2 block">Crew</label>
+                    <div className="mb-2">
+                      {editMembers.map(m => {
+                        const isInvited = invited.has(m.id)
+                        return (
+                          <div key={m.id} className="flex items-center gap-2.5 py-2 border-b border-black/[0.04]">
+                            <EmojiAvatar emoji={m.emoji} size="sm" />
+                            <span className="flex-1 text-[13px] font-semibold text-ink flex items-center gap-1.5">
+                              {m.name}
+                              {m.isMe && <span className="text-[10px] font-normal text-[#aaa]">(you)</span>}
+                            </span>
+                            {m.isMe ? (
+                              <div
+                                aria-label="You can't remove yourself"
+                                className="w-7 h-7 rounded-full bg-black/[0.05] border-2 border-[#ddd] flex items-center justify-center"
+                              >
+                                <i className="ti ti-lock text-[#aaa] text-xs" />
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => toggleInvite(m.id, m.isMe)}
+                                aria-label={isInvited ? `Remove ${m.name}` : `Invite ${m.name}`}
+                                className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${isInvited ? 'bg-mint border-mint' : 'border-[#ddd]'}`}
+                              >
+                                {isInvited && <i className="ti ti-check text-white text-xs" />}
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                      {editMembers.length === 0 && (
+                        <p className="text-[12px] text-[#aaa] text-center py-3">No crew members found.</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Save footer */}
+              <div className="px-5 pt-3 pb-5 border-t border-black/[0.04] flex-shrink-0">
+                {saveError && <p className="text-red-500 text-xs mb-2 text-center">{saveError}</p>}
+                <button
+                  onClick={saveEdits}
+                  disabled={saving || editLoading}
+                  className="w-full py-4 bg-ink text-white rounded-full font-display font-black italic text-base disabled:opacity-50"
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}

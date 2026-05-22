@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --base: #FFFBF5;
+  --ink: #111111;
+  --ink2: #555555;
+  --ink3: #aaaaaa;
+  --ink4: #e5e7eb;
+  --primary: #FB923C;
+  --mint: #34D399;
+  --violet: #818CF8;
+  --pink: #F472B6;
+  --gold: #FCD34D;
+  --glass: rgba(255,255,255,0.72);
+  --glass-border: rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  background: #E8E4DC;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  overscroll-behavior: none;
+}
+
+#root {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding: 24px 16px 40px;
+}
+
+.phone-shell {
+  width: 375px;
+  min-height: 812px;
+  background: var(--base);
+  border-radius: 44px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 32px 80px rgba(0,0,0,0.15);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollable content area */
+.scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll-area::-webkit-scrollbar { display: none; }
+
+/* Glass card */
+.glass-card {
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+}
+
+/* Display font */
+.font-display { font-family: 'Plus Jakarta Sans', sans-serif; }
+
+/* Orbs */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+@keyframes barFill {
+  from { width: 0%; }
+  to   { width: var(--tw); }
+}
+
+.animate-fade-up   { animation: fadeUp 0.35s ease both; }
+.animate-fade-up-1 { animation: fadeUp 0.35s 0.05s ease both; }
+.animate-fade-up-2 { animation: fadeUp 0.35s 0.10s ease both; }
+.animate-fade-up-3 { animation: fadeUp 0.35s 0.15s ease both; }
+.animate-fade-up-4 { animation: fadeUp 0.35s 0.20s ease both; }
+.animate-fade-up-5 { animation: fadeUp 0.35s 0.25s ease both; }
+
+.shimmer {
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+  animation: shimmer 2s infinite;
+}

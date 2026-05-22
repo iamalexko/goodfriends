@@ -1,0 +1,290 @@
+import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
+import { NavBar, EmojiAvatar, Pill, SectionHeader } from '../components/UI'
+
+const TIER_PILL = { 1: 'gold', 2: 'orange', 3: 'neutral' }
+const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' }
+
+function PlanCard({ plan, onPress, index }) {
+  const isPending = !plan.my_rsvp
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.06 }}
+      onClick={() => onPress(plan)}
+      className={`glass-card mx-5 mb-2.5 p-3.5 cursor-pointer active:scale-[0.99] transition-transform ${isPending ? 'border-[1.5px] border-primary' : ''}`}
+    >
+      {isPending && (
+        <div className="flex items-center gap-1 text-primary text-[11px] font-bold mb-1.5">
+          <i className="ti ti-circle-dot text-xs" /> Waiting for your reply
+        </div>
+      )}
+      <div className="flex items-start justify-between mb-1.5">
+        <div className="font-display font-extrabold text-base text-ink leading-tight">{plan.name}</div>
+        <Pill variant={TIER_PILL[plan.tier]}>{TIER_LABEL[plan.tier]}</Pill>
+      </div>
+      <div className="flex items-center gap-1.5 text-[12px] text-[#aaa] mb-2">
+        <i className="ti ti-calendar text-[13px]" />
+        {new Date(plan.date).toLocaleDateString('en-AE', { weekday:'short', day:'numeric', month:'short' })} · {plan.time} · {plan.location}
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          <div className="flex">
+            {(plan.rsvp_faces || []).slice(0,3).map((e, i) => (
+              <div key={i} className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-sm border-2 border-base -mr-1.5">{e}</div>
+            ))}
+          </div>
+          <span className="text-[11px] text-[#aaa] ml-3">
+            {plan.confirmed_count} in{plan.likely_count > 0 ? ` · ${plan.likely_count} likely` : ''}
+          </span>
+        </div>
+        {isPending
+          ? <span className="text-[11px] font-bold text-primary">Reply now</span>
+          : plan.is_organiser
+            ? <span className="text-[10px] text-[#aaa]">You planned this</span>
+            : null
+        }
+      </div>
+    </motion.div>
+  )
+}
+
+export default function Home({ navigate }) {
+  const { profile } = useAuth()
+  const [plans, setPlans] = useState([])
+  const [pastPlans, setPastPlans] = useState([])
+  const [activity, setActivity] = useState([])
+  const [group, setGroup] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { loadData() }, [])
+
+  async function loadData() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Get user's group
+    const { data: membership } = await supabase
+      .from('group_members').select('group_id, groups(*)').eq('user_id', user.id).single()
+
+    const groupId = membership?.group_id
+    if (!groupId) { setLoading(false); return }
+
+    // First 4 member emojis for the crew pill
+    const { data: memberData } = await supabase
+      .from('group_members')
+      .select('profiles(emoji)')
+      .eq('group_id', groupId)
+      .limit(4)
+    const memberEmojis = memberData?.map(m => m.profiles?.emoji).filter(Boolean) || []
+
+    // Total member count for the +N overflow indicator
+    const { count: memberCount } = await supabase
+      .from('group_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('group_id', groupId)
+
+    // Average attendance across all scored members in this group
+    const { data: scoreData } = await supabase
+      .from('member_scores')
+      .select('attendance_rate')
+      .eq('group_id', groupId)
+    const rates = scoreData?.map(s => s.attendance_rate).filter(Boolean) || []
+    const avg = rates.length > 0
+      ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length)
+      : null
+
+    setGroup({
+      ...membership.groups,
+      avg_attendance: avg,
+      member_emojis: memberEmojis,
+      member_count: memberCount || memberEmojis.length,
+    })
+
+    // Upcoming plans
+    const { data: upcomingData } = await supabase
+      .from('plans')
+      .select(`*, rsvps(user_id, status, profiles(emoji, display_name))`)
+      .eq('group_id', groupId)
+      .eq('status', 'open')
+      .gte('date', new Date().toISOString().split('T')[0])
+      .order('date', { ascending: true })
+      .limit(5)
+
+    if (upcomingData) {
+      const enriched = upcomingData.map(p => {
+        const confirmed = p.rsvps.filter(r => r.status === 'in')
+        const likely = p.rsvps.filter(r => r.status === 'likely')
+        const mine = p.rsvps.find(r => r.user_id === user.id)
+        return {
+          ...p,
+          confirmed_count: confirmed.length,
+          likely_count: likely.length,
+          my_rsvp: mine?.status,
+          is_organiser: p.organiser_id === user.id,
+          rsvp_faces: confirmed.map(r => r.profiles?.emoji).filter(Boolean),
+        }
+      })
+      setPlans(enriched)
+    }
+
+    // Past plans
+    const { data: past } = await supabase
+      .from('plans').select('*')
+      .eq('group_id', groupId).eq('status', 'closed')
+      .order('date', { ascending: false }).limit(3)
+    if (past) setPastPlans(past)
+
+    setLoading(false)
+  }
+
+  const day = new Date().toLocaleDateString('en-AE', { weekday: 'long' })
+  const firstName = profile?.display_name?.split(' ')[0] || 'there'
+
+  return (
+    <div className="phone-shell">
+      <div className="orb" style={{ width:200, height:200, background:'#FDE68A', top:-50, right:-50, opacity:0.45 }} />
+      <div className="orb" style={{ width:140, height:140, background:'#BAE6FD', top:200, left:-40, opacity:0.35 }} />
+
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="px-5 pt-5 pb-3 relative z-10"
+      >
+        <div className="text-[9px] text-[#bbb] font-medium uppercase tracking-wider mb-1">{day} · Dubai</div>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="font-display text-[22px] font-black italic text-ink leading-tight">
+              Hey {firstName} {profile?.emoji || '👋'}
+            </div>
+            {group && (
+              <motion.div
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate('crew')}
+                className="cursor-pointer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'rgba(255,255,255,0.72)',
+                  backdropFilter: 'blur(14px)',
+                  WebkitBackdropFilter: 'blur(14px)',
+                  border: '1px solid rgba(0,0,0,0.06)',
+                  borderRadius: '999px',
+                  padding: '5px 10px 5px 6px',
+                  marginTop: '8px',
+                }}
+              >
+                {/* Overlapping emoji faces */}
+                <div style={{ display: 'flex' }}>
+                  {(group.member_emojis || []).slice(0, 4).map((e, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        width: '20px', height: '20px', borderRadius: '50%',
+                        background: '#f3f4f6',
+                        fontSize: '11px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: '1.5px solid #FFFBF5',
+                        marginRight: '-5px',
+                      }}
+                    >
+                      {e}
+                    </div>
+                  ))}
+                  {group.member_count > 4 && (
+                    <div
+                      style={{
+                        width: '20px', height: '20px', borderRadius: '50%',
+                        background: '#f3f4f6',
+                        color: '#aaa',
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: '1.5px solid #FFFBF5',
+                        marginRight: '-5px',
+                      }}
+                    >
+                      +{group.member_count - 4}
+                    </div>
+                  )}
+                </div>
+
+                <span style={{ fontSize: '10px', fontWeight: 600, color: '#555', marginLeft: '3px' }}>
+                  {group.name}
+                </span>
+
+                <div style={{ width: '1px', height: '12px', background: 'rgba(0,0,0,0.08)', margin: '0 2px' }} />
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#34D399' }} />
+                  <span style={{ fontSize: '9px', fontWeight: 700, color: '#34D399' }}>
+                    {group.avg_attendance ? `${group.avg_attendance}%` : '—'}
+                  </span>
+                </div>
+
+                <i className="ti ti-chevron-right" style={{ fontSize: '10px', color: '#ddd' }} />
+              </motion.div>
+            )}
+          </div>
+          <EmojiAvatar emoji={profile?.emoji} isYou onClick={() => navigate('profile')} />
+        </div>
+      </motion.div>
+
+      <div className="scroll-area relative z-10">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-3xl animate-spin">⚡</div>
+          </div>
+        ) : (
+          <>
+            <SectionHeader>Coming up</SectionHeader>
+
+            {plans.length === 0 ? (
+              <div className="glass-card mx-5 mb-3 p-5 text-center">
+                <div className="text-3xl mb-2">🎉</div>
+                <p className="text-[13px] font-bold text-ink mb-1">No plans yet</p>
+                <p className="text-[12px] text-[#aaa]">Use the + button in the nav bar to plan something.</p>
+              </div>
+            ) : (
+              plans.map((plan, i) => (
+                <PlanCard key={plan.id} plan={plan} onPress={() => navigate('plan-detail', { planId: plan.id })} index={i} />
+              ))
+            )}
+
+            {pastPlans.length > 0 && (
+              <>
+                <div className="h-px bg-black/[0.06] mx-5 my-4" />
+                <SectionHeader>Last plans</SectionHeader>
+                {pastPlans.map((p, i) => (
+                  <motion.div
+                    key={p.id}
+                    initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay: 0.3 + i*0.05 }}
+                    onClick={() => navigate('plan-detail', { planId: p.id })}
+                    className="flex items-center justify-between px-5 py-2.5 border-b border-black/[0.04] cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-[#e5e7eb]" />
+                      <div>
+                        <div className="text-[13px] font-semibold text-[#555]">{p.name}</div>
+                        <div className="text-[11px] text-[#aaa]">{new Date(p.date).toLocaleDateString('en-AE', { day:'numeric', month:'short' })}</div>
+                      </div>
+                    </div>
+                    <Pill variant="mint">Closed</Pill>
+                  </motion.div>
+                ))}
+              </>
+            )}
+            <div className="h-5" />
+          </>
+        )}
+      </div>
+
+      <NavBar active="home" navigate={navigate} />
+    </div>
+  )
+}
