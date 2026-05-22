@@ -282,8 +282,52 @@ export default function PlanDetail({ navigate, planId }) {
 
   async function setRsvpStatus(status) {
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('rsvps').upsert({ plan_id: planId, user_id: user.id, status })
+    if (!user) return
+
+    // Snapshot for rollback if the write fails
+    const previousMy = myRsvp
+    const previousRsvps = rsvps
+
+    // Optimistic update — both the top selector AND the crew list below.
+    // The crew list reads from `rsvps`, so it would otherwise stay stale
+    // until next page load.
     setMyRsvp(status)
+    setRsvps(prev => {
+      const existing = prev.find(r => r.user_id === user.id)
+      if (existing) {
+        return prev.map(r => r.user_id === user.id ? { ...r, status } : r)
+      }
+      // Defensive: user wasn't pre-invited (e.g. they joined the group after
+      // the plan was created and the organiser hasn't reopened invites).
+      return [
+        ...prev,
+        {
+          plan_id: planId,
+          user_id: user.id,
+          status,
+          profiles: {
+            id: user.id,
+            display_name: profile?.display_name,
+            emoji: profile?.emoji,
+          },
+        },
+      ]
+    })
+
+    // Explicit onConflict so PostgREST UPDATEs the existing (plan_id,user_id)
+    // row instead of trying to INSERT a duplicate that would hit the unique
+    // constraint and silently fail.
+    const { error } = await supabase
+      .from('rsvps')
+      .upsert(
+        { plan_id: planId, user_id: user.id, status },
+        { onConflict: 'plan_id,user_id' }
+      )
+    if (error) {
+      console.error('PlanDetail: failed to save RSVP', error)
+      setMyRsvp(previousMy)
+      setRsvps(previousRsvps)
+    }
   }
 
   async function openEditSheet() {
