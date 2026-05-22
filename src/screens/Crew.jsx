@@ -252,7 +252,7 @@ export default function Crew({ navigate }) {
                       <span className="text-[10px] font-bold tracking-widest uppercase text-[#bbb]">hall of fame</span>
                       <span className="text-[10px] text-[#aaa]">all time</span>
                     </div>
-                    <div className="glass-card mx-5 p-4 mb-4">
+                    <div className="glass-card mx-5 px-4 pt-8 pb-4 mb-4">
                       <div className="flex items-end justify-center gap-3">
                         {cols.map((col) => (
                           <div key={col.rank} className="flex flex-col items-center gap-1.5">
