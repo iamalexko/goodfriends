@@ -7,6 +7,14 @@ import { NavBar, TopBar, EmojiAvatar, Pill, SectionHeader } from '../components/
 const TIER_PILL = { 1: 'tier1', 2: 'tier2', 3: 'tier3' }
 const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' }
 
+function getGreeting() {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 12) return 'Good morning'
+  if (hour >= 12 && hour < 17) return 'Good afternoon'
+  if (hour >= 17 && hour < 21) return 'Good evening'
+  return 'Good night'
+}
+
 function PlanCard({ plan, onPress, index }) {
   const isPending = !plan.my_rsvp
   return (
@@ -164,13 +172,12 @@ export default function Home({ navigate }) {
               fontFamily: '"Plus Jakarta Sans", sans-serif',
               fontSize: 22,
               fontWeight: 700,
-              fontStyle: 'normal',
-              letterSpacing: '-0.4px',
               color: '#111',
-              lineHeight: 1.15,
+              letterSpacing: '-0.4px',
+              lineHeight: 1,
             }}
           >
-            Hey {firstName} {profile?.emoji || '👋'}
+            {getGreeting()}, {firstName} {profile?.emoji}
           </div>
           {group && (
             <motion.div

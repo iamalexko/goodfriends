@@ -4,11 +4,20 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { NavBar, TopBar, Pill, StatCell } from '../components/UI'
 
+const EMOJI_CHOICES = [
+  '😎','🤩','😄','😜','🫶','🥳','😇','🤗','😏','🥸','🤠','😍','🥹','🫡','😤','🤓',
+  '👻','🦁','🐯','🦊','🐼','🐸','🦋','🌊','⚡','🔥','🌈','💫','🎯','🎸','🏄','🌴',
+]
+
 export default function Profile({ navigate }) {
-  const { profile } = useAuth()
+  const { profile, updateProfile } = useAuth()
   const [scores, setScores] = useState(null)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editEmoji, setEditEmoji] = useState('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadData() }, [])
 
@@ -53,8 +62,30 @@ export default function Profile({ navigate }) {
             <div className="text-[72px] leading-none">{profile?.emoji || '😎'}</div>
             <div className="absolute inset-[-4px] rounded-full border-[3px] border-primary pointer-events-none" />
           </div>
-          <div className="font-display text-[28px] font-black text-ink mb-1">{profile?.display_name || 'You'}</div>
-          <div className="text-[12px] text-[#aaa] mb-3">Dubai · Goodfriends member</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+            <div style={{
+              fontFamily: '"Plus Jakarta Sans",sans-serif',
+              fontSize: 26, fontWeight: 800, color: '#111', letterSpacing: '-0.5px',
+            }}>
+              {profile?.display_name || 'You'}
+            </div>
+            <button
+              onClick={() => {
+                setEditName(profile?.display_name || '')
+                setEditEmoji(profile?.emoji || '😎')
+                setEditing(true)
+              }}
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'rgba(0,0,0,0.05)', border: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+              aria-label="Edit profile"
+            >
+              <i className="ti ti-pencil" style={{ fontSize: 13, color: '#888' }} />
+            </button>
+          </div>
+          <div className="text-[12px] text-[#aaa] mb-3 mt-1">Dubai · Goodfriends member</div>
           {TAGS.length > 0 && (
             <div className="flex flex-wrap gap-1.5 justify-center">
               {TAGS.map(t => <Pill key={t.label} variant={t.variant}>{t.label}</Pill>)}
@@ -130,6 +161,138 @@ export default function Profile({ navigate }) {
       </div>
 
       <NavBar active="profile" navigate={navigate} />
+
+      {editing && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'flex-end',
+          }}
+          onClick={() => setEditing(false)}
+        >
+          <motion.div
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 680, margin: '0 auto',
+              background: '#FFFBF5', borderRadius: '28px 28px 0 0',
+              padding: '20px 24px 40px',
+            }}
+          >
+            {/* Drag handle */}
+            <div style={{
+              width: 36, height: 4, borderRadius: 999,
+              background: 'rgba(0,0,0,0.1)', margin: '0 auto 20px',
+            }} />
+
+            {/* Header */}
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', marginBottom: 24,
+            }}>
+              <div style={{
+                fontFamily: '"Plus Jakarta Sans",sans-serif',
+                fontSize: 20, fontWeight: 800, color: '#111',
+              }}>
+                Edit profile
+              </div>
+              <button
+                onClick={() => setEditing(false)}
+                style={{
+                  width: 30, height: 30, borderRadius: '50%',
+                  background: 'rgba(0,0,0,0.06)', border: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+                aria-label="Close"
+              >
+                <i className="ti ti-x" style={{ fontSize: 14, color: '#888' }} />
+              </button>
+            </div>
+
+            {/* Emoji preview */}
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 64, marginBottom: 8, lineHeight: 1 }}>{editEmoji}</div>
+              <div style={{ fontSize: 11, color: '#aaa', fontWeight: 500 }}>
+                Tap an emoji below to change
+              </div>
+            </div>
+
+            {/* Emoji grid */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)',
+              gap: 8, marginBottom: 24,
+            }}>
+              {EMOJI_CHOICES.map(e => (
+                <button
+                  key={e}
+                  onClick={() => setEditEmoji(e)}
+                  style={{
+                    width: 38, height: 38, borderRadius: '50%',
+                    background: editEmoji === e ? '#FEF3C7' : '#f5f5f5',
+                    border: editEmoji === e ? '2px solid #FB923C' : '2px solid transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 20, cursor: 'pointer',
+                    transform: editEmoji === e ? 'scale(1.1)' : 'scale(1)',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+
+            {/* Name input */}
+            <label style={{
+              fontSize: 10, fontWeight: 700, color: '#aaa',
+              textTransform: 'uppercase', letterSpacing: '0.08em',
+              display: 'block', marginBottom: 6,
+            }}>
+              Your name
+            </label>
+            <input
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              onFocus={e => (e.target.style.borderColor = '#FB923C')}
+              onBlur={e => (e.target.style.borderColor = 'rgba(0,0,0,0.1)')}
+              placeholder="Your name"
+              style={{
+                width: '100%', padding: '14px 16px',
+                border: '1.5px solid rgba(0,0,0,0.1)',
+                borderRadius: 14, fontSize: 15,
+                fontFamily: 'Inter, sans-serif',
+                color: '#111', background: 'rgba(255,255,255,0.8)',
+                outline: 'none', marginBottom: 20,
+              }}
+            />
+
+            {/* Save button */}
+            <button
+              onClick={async () => {
+                if (!editName.trim()) return
+                setSaving(true)
+                await updateProfile({ display_name: editName.trim(), emoji: editEmoji })
+                setSaving(false)
+                setEditing(false)
+              }}
+              disabled={saving || !editName.trim()}
+              style={{
+                width: '100%', padding: 16,
+                background: saving || !editName.trim() ? '#e5e7eb' : '#111',
+                color: saving || !editName.trim() ? '#aaa' : '#fff',
+                border: 'none', borderRadius: 12,
+                fontFamily: '"Plus Jakarta Sans",sans-serif',
+                fontSize: 15, fontWeight: 700,
+                cursor: saving || !editName.trim() ? 'default' : 'pointer',
+              }}
+            >
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }
