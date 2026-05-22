@@ -1,14 +1,36 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { NavBar, TopBar, Pill, StatCell } from '../components/UI'
 
+const PROFILE_EMOJIS = [
+  '😎','🤩','😄','😜','🫶','🥳','😇','🤗',
+  '😏','🥸','🤠','😍','🥹','🫡','😤','🤓',
+  '👻','🦁','🐯','🦊','🐼','🐸','🦋','🌊',
+  '⚡','🔥','🌈','💫','🎯','🎸','🏄','🌴',
+]
+
 export default function Profile({ navigate }) {
-  const { profile } = useAuth()
+  const { profile, updateProfile } = useAuth()
   const [scores, setScores] = useState(null)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
+  const [savingEmoji, setSavingEmoji] = useState(false)
+
+  async function pickProfileEmoji(nextEmoji) {
+    if (savingEmoji) return
+    if (nextEmoji === profile?.emoji) { setEmojiPickerOpen(false); return }
+    setSavingEmoji(true)
+    const { error } = await updateProfile({ emoji: nextEmoji })
+    setSavingEmoji(false)
+    if (error) {
+      console.error('Profile: failed to update emoji', error)
+      return
+    }
+    setEmojiPickerOpen(false)
+  }
 
   useEffect(() => { loadData() }, [])
 
@@ -49,9 +71,20 @@ export default function Profile({ navigate }) {
       <div className="scroll-area relative z-10">
         {/* Hero */}
         <motion.div initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} className="flex flex-col items-center px-5 pt-6 pb-4">
-          <div className="mb-3">
+          <button
+            type="button"
+            onClick={() => setEmojiPickerOpen(true)}
+            className="relative mb-3 cursor-pointer active:scale-[0.97] transition-transform"
+            aria-label="Change profile emoji"
+          >
             <div className="text-[72px] leading-none">{profile?.emoji || '😎'}</div>
-          </div>
+            <div
+              className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-ink border-[3px] border-base flex items-center justify-center pointer-events-none"
+              style={{ boxShadow: '0 2px 6px rgba(0,0,0,0.12)' }}
+            >
+              <i className="ti ti-pencil text-white" style={{ fontSize: 11 }} />
+            </div>
+          </button>
           <div className="font-display text-[28px] font-black text-ink mb-1">{profile?.display_name || 'You'}</div>
           <div className="text-[12px] text-[#aaa] mb-3">Dubai · Goodfriends member</div>
           {TAGS.length > 0 && (
@@ -129,6 +162,48 @@ export default function Profile({ navigate }) {
       </div>
 
       <NavBar active="profile" navigate={navigate} />
+
+      <AnimatePresence>
+        {emojiPickerOpen && (
+          <motion.div
+            key="profile-emoji-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => !savingEmoji && setEmojiPickerOpen(false)}
+            className="absolute inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-base w-[88%] max-w-[320px] rounded-3xl p-5 mx-5 mb-5 shadow-2xl border border-black/[0.06]"
+            >
+              <div className="font-display font-black text-[18px] text-ink mb-1">Pick your emoji</div>
+              <p className="text-[12px] text-[#aaa] mb-3">This is how your crew will recognise you.</p>
+              <div className="grid grid-cols-8 gap-2 mb-3">
+                {PROFILE_EMOJIS.map(e => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => pickProfileEmoji(e)}
+                    disabled={savingEmoji}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-xl transition-all disabled:opacity-50 ${profile?.emoji === e ? 'bg-[#FEF3C7] border-2 border-primary scale-110' : 'bg-gray-100'}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setEmojiPickerOpen(false)}
+                disabled={savingEmoji}
+                className="w-full py-2.5 rounded-full text-ink/60 text-[13px] font-semibold disabled:opacity-50"
+              >
+                {savingEmoji ? 'Saving…' : 'Cancel'}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
