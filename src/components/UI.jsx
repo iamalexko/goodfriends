@@ -8,9 +8,7 @@ export function TopBar({ navigate }) {
     <div
       className="sticky top-0 z-50 flex items-center justify-between px-5 border-b border-black/[0.06]"
       style={{
-        background: 'rgba(255,251,245,0.95)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
+        background: '#FFFBF5',
         paddingTop: 'max(12px, env(safe-area-inset-top))',
         paddingBottom: '12px',
       }}

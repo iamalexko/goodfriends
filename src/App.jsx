@@ -78,8 +78,16 @@ export default function App() {
   const orbs = (
     <>
       <div
-        className="fixed top-0 right-0 w-[400px] h-[400px] rounded-full pointer-events-none z-0"
-        style={{ background: '#FDE68A', filter: 'blur(60px)', opacity: 0.7, transform: 'translate(20%, -20%)' }}
+        className="fixed right-0 w-[400px] h-[400px] rounded-full pointer-events-none z-0"
+        style={{
+          // Sits below the top bar (env safe-area + TopBar height ~100px)
+          // so the yellow glow doesn't bleed up into the iOS status bar area.
+          top: 'calc(env(safe-area-inset-top, 0px) + 60px)',
+          background: '#FDE68A',
+          filter: 'blur(60px)',
+          opacity: 0.7,
+          transform: 'translate(20%, 0)',
+        }}
       />
       <div
         className="fixed bottom-0 left-0 w-[320px] h-[320px] rounded-full pointer-events-none z-0"
