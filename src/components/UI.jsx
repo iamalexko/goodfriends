@@ -2,31 +2,61 @@
 
 export function NavBar({ active, navigate }) {
   const items = [
-    { id: 'home',        icon: 'ti-home',     label: 'home' },
-    { id: 'crew',        icon: 'ti-users',    label: 'crew' },
-    { id: 'create',      icon: null,          label: 'plan', fab: true },
-    { id: 'plans',       icon: 'ti-calendar', label: 'plans' },
-    { id: 'profile',     icon: 'ti-user',     label: 'profile' },
+    { id: 'home',    icon: 'ti-home',     label: 'home' },
+    { id: 'crew',    icon: 'ti-users',    label: 'crew' },
+    { id: 'create',  icon: null,          label: 'plan', fab: true },
+    { id: 'plans',   icon: 'ti-calendar', label: 'plans' },
+    { id: 'profile', icon: 'ti-user',     label: 'profile' },
   ]
   return (
-    <div className="flex justify-around items-center py-2.5 pb-7 border-t border-black/[0.06] bg-[rgba(255,251,245,0.95)] backdrop-blur-xl z-10">
-      {items.map(item => item.fab ? (
-        <div key="fab" className="flex flex-col items-center gap-1 -mt-2.5">
-          <button
-            onClick={() => navigate('create')}
-            className="w-[50px] h-[50px] rounded-full bg-ink flex items-center justify-center border-[3px] border-base"
-          >
-            <i className="ti ti-plus text-white text-xl" />
+    <>
+      {/* Mobile bottom nav */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 md:hidden flex justify-around items-center py-2 border-t border-black/[0.06] bg-[rgba(255,251,245,0.95)] backdrop-blur-xl"
+        style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
+      >
+        {items.map(item => item.fab ? (
+          <div key="fab" className="flex flex-col items-center -mt-2">
+            <button
+              onClick={() => navigate('create')}
+              className="w-[50px] h-[50px] rounded-full bg-ink flex items-center justify-center border-[3px] border-base shadow-lg"
+            >
+              <i className="ti ti-plus text-white text-xl" />
+            </button>
+            <span className="text-[9px] font-semibold text-[#ccc] mt-1">plan</span>
+          </div>
+        ) : (
+          <button key={item.id} onClick={() => navigate(item.id)} className="flex flex-col items-center gap-1 px-3 py-1">
+            <i className={`ti ${item.icon} text-xl ${active === item.id ? 'text-ink' : 'text-[#ccc]'}`} />
+            <span className={`text-[9px] font-semibold ${active === item.id ? 'text-ink' : 'text-[#ccc]'}`}>{item.label}</span>
           </button>
-          <span className="text-[9px] font-semibold text-[#ccc] mt-1">plan</span>
-        </div>
-      ) : (
-        <button key={item.id} onClick={() => navigate(item.id)} className="flex flex-col items-center gap-1 px-2.5">
-          <i className={`ti ${item.icon} text-xl ${active === item.id ? 'text-ink' : 'text-[#ccc]'}`} />
-          <span className={`text-[9px] font-semibold ${active === item.id ? 'text-ink' : 'text-[#ccc]'}`}>{item.label}</span>
-        </button>
-      ))}
-    </div>
+        ))}
+      </div>
+
+      {/* Desktop sidebar nav */}
+      <div className="hidden md:flex fixed left-0 top-0 bottom-0 w-[220px] flex-col gap-1 px-4 py-8 border-r border-black/[0.06] bg-[#FFFBF5] z-50">
+        <div className="font-display text-[20px] font-black italic text-ink mb-8 px-3">Goodfriends.</div>
+        {items.map(item => item.fab ? (
+          <button
+            key="fab"
+            onClick={() => navigate('create')}
+            className="flex items-center gap-3 px-3 py-3 bg-ink text-white rounded-[12px] font-semibold text-[14px] mt-2 mb-2"
+          >
+            <i className="ti ti-plus text-lg" />
+            New plan
+          </button>
+        ) : (
+          <button
+            key={item.id}
+            onClick={() => navigate(item.id)}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[14px] font-semibold transition-colors ${active === item.id ? 'bg-black/[0.06] text-ink' : 'text-[#aaa] hover:text-ink hover:bg-black/[0.03]'}`}
+          >
+            <i className={`ti ${item.icon} text-lg`} />
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </>
   )
 }
 
