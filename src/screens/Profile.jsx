@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { NavBar, Pill, StatCell } from '../components/UI'
+import { NavBar, TopBar, Pill, StatCell } from '../components/UI'
 
 export default function Profile({ navigate }) {
   const { profile } = useAuth()
@@ -42,6 +42,7 @@ export default function Profile({ navigate }) {
 
   return (
     <div className="phone-shell">
+      <TopBar navigate={navigate} />
       <div className="orb" style={{ width:200, height:200, background:'#FDE68A', top:-60, right:-50, opacity:0.45 }} />
       <div className="orb" style={{ width:140, height:140, background:'#BAE6FD', top:300, left:-40, opacity:0.35 }} />
 

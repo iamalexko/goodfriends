@@ -79,11 +79,11 @@ export default function App() {
     <>
       <div
         className="fixed top-0 right-0 w-[400px] h-[400px] rounded-full pointer-events-none z-0"
-        style={{ background: '#FDE68A', filter: 'blur(80px)', opacity: 0.35, transform: 'translate(30%, -30%)' }}
+        style={{ background: '#FDE68A', filter: 'blur(60px)', opacity: 0.7, transform: 'translate(20%, -20%)' }}
       />
       <div
-        className="fixed bottom-0 left-0 w-[300px] h-[300px] rounded-full pointer-events-none z-0"
-        style={{ background: '#BAE6FD', filter: 'blur(80px)', opacity: 0.3, transform: 'translate(-30%, 30%)' }}
+        className="fixed bottom-0 left-0 w-[320px] h-[320px] rounded-full pointer-events-none z-0"
+        style={{ background: '#BAE6FD', filter: 'blur(60px)', opacity: 0.55, transform: 'translate(-20%, 20%)' }}
       />
     </>
   )

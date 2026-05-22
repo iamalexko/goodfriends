@@ -3,74 +3,20 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { NavBar, BackButton, Pill, EmojiAvatar, Divider, SectionHeader } from '../components/UI'
+import { NavBar, TopBar, BackButton, Pill, EmojiAvatar, Divider, SectionHeader } from '../components/UI'
 
 const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶']
 
-function ReactionBar({ postId, grouped, myReaction, pickerOpen, onOpenPicker, onClosePicker, onToggle }) {
-  // Show up to 3 unique emojis, then a + button to open the picker.
-  const visible = grouped.slice(0, 3)
-  return (
-    <div className="flex items-center gap-1 relative">
-      {visible.map(([emoji, count]) => {
-        const isMine = myReaction?.emoji === emoji
-        return (
-          <button
-            key={emoji}
-            onClick={() => onToggle(postId, emoji)}
-            className={`rounded-full px-2 py-0.5 text-[12px] flex items-center gap-1 transition-colors ${isMine ? 'bg-[#FEF3C7] border border-[#FCD34D]' : 'bg-white/80 border border-black/[0.04]'}`}
-          >
-            <span>{emoji}</span>
-            <span className="text-[10px] text-[#666] font-semibold">{count}</span>
-          </button>
-        )
-      })}
-      <button
-        onClick={() => pickerOpen ? onClosePicker() : onOpenPicker()}
-        aria-label="Add reaction"
-        className="w-6 h-6 rounded-full bg-white/80 border border-black/[0.04] flex items-center justify-center text-[#aaa] text-[12px]"
-      >
-        +
-      </button>
-      <AnimatePresence>
-        {pickerOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 4, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-            className="absolute bottom-full mb-1.5 left-0 z-20 bg-white rounded-full shadow-lg border border-black/[0.06] px-2 py-1.5 flex items-center gap-1"
-          >
-            {REACTION_OPTIONS.map(e => (
-              <button
-                key={e}
-                onClick={() => onToggle(postId, e)}
-                className="text-[20px] leading-none w-7 h-7 flex items-center justify-center rounded-full hover:bg-black/5 active:scale-95 transition-transform"
-              >
-                {e}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
-
-function relativeTime(iso) {
-  if (!iso) return ''
-  const t = new Date(iso).getTime()
-  const diff = Date.now() - t
+function formatTimeAgo(dateStr) {
+  if (!dateStr) return ''
+  const diff = Date.now() - new Date(dateStr).getTime()
   if (isNaN(diff)) return ''
-  const s = Math.round(diff / 1000)
-  if (s < 60) return 'just now'
-  const m = Math.round(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.round(m / 60)
-  if (h < 24) return `${h}h ago`
-  const d = Math.round(h / 24)
-  if (d < 7) return `${d}d ago`
-  return new Date(iso).toLocaleDateString('en-AE', { day: 'numeric', month: 'short' })
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
 }
 
 const TIER_LABEL = { 1: 'Tier 1 · Big deal', 2: 'Tier 2 · Weekend plan', 3: 'Tier 3 · Low-key' }
@@ -119,6 +65,7 @@ export default function PlanDetail({ navigate, planId }) {
   const [actionSheetPost, setActionSheetPost] = useState(null) // post being acted on
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null)
   const [reactionPickerPostId, setReactionPickerPostId] = useState(null)
+  const [lightbox, setLightbox] = useState(null) // { photos: string[], index: number }
   const [currentUserId, setCurrentUserId] = useState(null)
   const fileInputRef = useRef(null)
   const commentInputRef = useRef(null)
@@ -255,6 +202,16 @@ export default function PlanDetail({ navigate, planId }) {
       map.set(r.emoji, (map.get(r.emoji) || 0) + 1)
     })
     return [...map.entries()]
+  }
+
+  function openLightbox(post, index) {
+    // Today each post has a single image_url; spec allows for multi-photo
+    // posts in future (image_url2 etc). Build the photos array from whatever
+    // url-shaped fields exist so this scales without further changes.
+    const photos = [post.image_url, post.image_url2, post.image_url3, post.image_url4]
+      .filter(Boolean)
+    if (photos.length === 0) return
+    setLightbox({ photos, index: Math.min(index, photos.length - 1) })
   }
 
   async function loadPlan() {
@@ -439,6 +396,7 @@ export default function PlanDetail({ navigate, planId }) {
 
   return (
     <div className="phone-shell">
+      <TopBar navigate={navigate} />
       <div className="orb" style={{ width:180, height:180, background:'#FDE68A', top:-50, right:-40, opacity:0.45 }} />
       <div className="orb" style={{ width:120, height:120, background:'#BAE6FD', top:200, left:-30, opacity:0.35 }} />
 
@@ -543,15 +501,23 @@ export default function PlanDetail({ navigate, planId }) {
         />
 
         {posts.length === 0 && !uploading && (
-          <div className="flex flex-col items-center text-center px-5 py-6">
-            <div className="text-[32px] leading-none mb-2">📸</div>
-            <div className="font-display font-extrabold italic text-[15px] text-ink">No moments yet</div>
-            <div className="text-[12px] text-[#aaa] mt-1">Be the first to add a photo or comment</div>
+          <div style={{ textAlign: 'center', padding: '32px 20px' }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>📸</div>
+            <div style={{
+              fontFamily: '"Plus Jakarta Sans", sans-serif',
+              fontWeight: 800, fontSize: 15, fontStyle: 'italic',
+              color: '#111', marginBottom: 4,
+            }}>
+              No moments yet
+            </div>
+            <p style={{ fontSize: 12, color: '#aaa', margin: 0 }}>
+              Be the first to add a photo or comment
+            </p>
           </div>
         )}
 
         {uploading && (
-          <div className="mx-5 mb-3 rounded-[16px] bg-gray-100 aspect-square flex items-center justify-center">
+          <div className="mx-5 mb-3 rounded-[14px] bg-gray-100 aspect-square flex items-center justify-center">
             <i className="ti ti-loader-2 animate-spin text-[#aaa] text-2xl" />
           </div>
         )}
@@ -561,13 +527,14 @@ export default function PlanDetail({ navigate, planId }) {
           const isConfirmingDelete = confirmingDeleteId === post.id
           const grouped = groupReactionsByEmoji(post.reactions)
           const myReaction = post.reactions?.find(r => r.user_id === currentUserId)
+          const photos = [post.image_url, post.image_url2, post.image_url3, post.image_url4].filter(Boolean)
 
           if (isConfirmingDelete) {
             return (
               <motion.div
                 key={post.id}
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="mx-5 mb-2 rounded-[16px] bg-red-50 border border-red-100 px-4 py-3 flex items-center justify-between gap-3"
+                className="mx-5 mb-2 rounded-[14px] bg-red-50 border border-red-100 px-4 py-3 flex items-center justify-between gap-3"
               >
                 <span className="text-[13px] font-semibold text-red-600 flex-1">
                   Delete this {post.type === 'photo' ? 'photo' : 'comment'}?
@@ -590,83 +557,201 @@ export default function PlanDetail({ navigate, planId }) {
             )
           }
 
+          // Shared header for both photo + comment posts
+          const header = (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{
+                width: 30, height: 30, borderRadius: '50%', background: '#f0f0f0',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 17, flexShrink: 0,
+              }}>
+                {post.profiles?.emoji || '😎'}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {post.profiles?.display_name || 'Friend'}
+                </span>
+                <span style={{ fontSize: 11, color: '#bbb', marginLeft: 6 }}>
+                  · {formatTimeAgo(post.created_at)}
+                </span>
+              </div>
+              {isOwn && (
+                <i
+                  className="ti ti-dots"
+                  style={{ fontSize: 16, color: '#ccc', cursor: 'pointer' }}
+                  onClick={() => setActionSheetPost(post)}
+                />
+              )}
+            </div>
+          )
+
+          // Reactions bar (used after photo grid OR speech bubble)
+          const reactionsBar = (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, position: 'relative' }}>
+              {grouped.map(([emoji, count]) => {
+                const isMine = myReaction?.emoji === emoji
+                return (
+                  <div
+                    key={emoji}
+                    onClick={() => toggleReaction(post.id, emoji)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      background: isMine ? '#FEF3C7' : 'rgba(255,255,255,0.8)',
+                      border: `1px solid ${isMine ? '#FB923C' : 'rgba(0,0,0,0.08)'}`,
+                      borderRadius: 999, padding: '3px 8px', cursor: 'pointer', fontSize: 12,
+                    }}
+                  >
+                    {emoji}
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#555' }}>{count}</span>
+                  </div>
+                )
+              })}
+              <div
+                onClick={() => setReactionPickerPostId(reactionPickerPostId === post.id ? null : post.id)}
+                style={{
+                  width: 24, height: 24, borderRadius: '50%',
+                  background: 'rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.08)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, cursor: 'pointer', color: '#888',
+                }}
+              >
+                +
+              </div>
+              <AnimatePresence>
+                {reactionPickerPostId === post.id && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+                    style={{
+                      position: 'absolute', bottom: '100%', left: 0, marginBottom: 6,
+                      background: '#fff', borderRadius: 999, padding: '6px 10px',
+                      border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                      display: 'flex', alignItems: 'center', gap: 4, zIndex: 20,
+                    }}
+                  >
+                    {REACTION_OPTIONS.map(e => (
+                      <button
+                        key={e}
+                        onClick={() => toggleReaction(post.id, e)}
+                        style={{
+                          fontSize: 20, lineHeight: 1, width: 28, height: 28,
+                          border: 'none', background: 'transparent', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          borderRadius: '50%',
+                        }}
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )
+
           if (post.type === 'photo') {
             return (
-              <div key={post.id} className="mx-5 mb-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-base flex-shrink-0">
-                    {post.profiles?.emoji || '😎'}
+              <div key={post.id} style={{ padding: '0 20px', marginBottom: 20 }}>
+                {header}
+                {photos.length === 1 && (
+                  <div
+                    onClick={() => openLightbox(post, 0)}
+                    style={{
+                      width: '100%', height: 180, borderRadius: 14,
+                      overflow: 'hidden', cursor: 'pointer', position: 'relative',
+                    }}
+                  >
+                    <img src={photos[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <div style={{
+                      position: 'absolute', bottom: 8, right: 8,
+                      background: 'rgba(0,0,0,0.4)', borderRadius: 6,
+                      padding: '3px 8px', display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                      <i className="ti ti-arrows-maximize" style={{ fontSize: 9, color: '#fff' }} />
+                      <span style={{ fontSize: 9, fontWeight: 600, color: '#fff' }}>View full</span>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="font-display font-extrabold italic text-[13px] text-ink">{post.profiles?.display_name || 'Friend'}</span>
-                    <span className="text-[11px] text-[#aaa]"> · {relativeTime(post.created_at)}</span>
+                )}
+                {photos.length === 2 && (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {photos.map((url, i) => (
+                      <div
+                        key={i}
+                        onClick={() => openLightbox(post, i)}
+                        style={{ flex: 1, height: 130, borderRadius: 14, overflow: 'hidden', cursor: 'pointer' }}
+                      >
+                        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    ))}
                   </div>
-                  {isOwn && (
-                    <button
-                      onClick={() => setActionSheetPost(post)}
-                      aria-label="Post actions"
-                      className="w-7 h-7 rounded-full flex items-center justify-center"
+                )}
+                {photos.length >= 3 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto', gap: 6 }}>
+                    <div
+                      onClick={() => openLightbox(post, 0)}
+                      style={{ gridColumn: '1/2', gridRow: '1/3', aspectRatio: '1', borderRadius: 14, overflow: 'hidden', cursor: 'pointer' }}
                     >
-                      <i className="ti ti-dots text-[#ccc] text-base" />
-                    </button>
-                  )}
-                </div>
-                <motion.img
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 280, damping: 24 }}
-                  src={post.image_url}
-                  alt=""
-                  className="w-full rounded-[16px] max-h-64 object-cover"
-                />
-                <ReactionBar
-                  postId={post.id}
-                  grouped={grouped}
-                  myReaction={myReaction}
-                  pickerOpen={reactionPickerPostId === post.id}
-                  onOpenPicker={() => setReactionPickerPostId(post.id)}
-                  onClosePicker={() => setReactionPickerPostId(null)}
-                  onToggle={toggleReaction}
-                />
+                      <img src={photos[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div
+                      onClick={() => openLightbox(post, 1)}
+                      style={{ aspectRatio: '1', borderRadius: 14, overflow: 'hidden', cursor: 'pointer' }}
+                    >
+                      <img src={photos[1]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div
+                      onClick={() => openLightbox(post, 2)}
+                      style={{ aspectRatio: '1', borderRadius: 14, overflow: 'hidden', cursor: 'pointer', position: 'relative', background: '#111' }}
+                    >
+                      {photos[2] && (
+                        <img
+                          src={photos[2]}
+                          alt=""
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: photos.length > 3 ? 0.4 : 1 }}
+                        />
+                      )}
+                      {photos.length > 3 && (
+                        <div style={{
+                          position: 'absolute', inset: 0, display: 'flex',
+                          alignItems: 'center', justifyContent: 'center',
+                          fontSize: 16, fontWeight: 700, color: '#fff',
+                          fontFamily: '"Plus Jakarta Sans", sans-serif',
+                        }}>
+                          +{photos.length - 2}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {reactionsBar}
               </div>
             )
           }
 
-          // Comment
+          // Comment — speech bubble
           return (
-            <div key={post.id} className="mx-5 mb-2 bg-white/60 backdrop-blur rounded-[16px] px-3 py-2.5">
-              <div className="flex items-start gap-2">
-                <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-base flex-shrink-0 mt-0.5">
-                  {post.profiles?.emoji || '😎'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-display font-extrabold italic text-[13px] text-ink">{post.profiles?.display_name || 'Friend'}</span>
-                    {isOwn && (
-                      <button
-                        onClick={() => setActionSheetPost(post)}
-                        aria-label="Post actions"
-                        className="w-7 h-7 rounded-full flex items-center justify-center -my-1"
-                      >
-                        <i className="ti ti-dots text-[#ccc] text-base" />
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-[13px] text-ink leading-snug mt-0.5 whitespace-pre-wrap break-words">{post.content}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[10px] text-[#aaa]">{relativeTime(post.created_at)}</span>
-                    <ReactionBar
-                      postId={post.id}
-                      grouped={grouped}
-                      myReaction={myReaction}
-                      pickerOpen={reactionPickerPostId === post.id}
-                      onOpenPicker={() => setReactionPickerPostId(post.id)}
-                      onClosePicker={() => setReactionPickerPostId(null)}
-                      onToggle={toggleReaction}
-                    />
-                  </div>
-                </div>
+            <div key={post.id} style={{ padding: '0 20px', marginBottom: 16 }}>
+              {header}
+              <div style={{
+                background: 'rgba(255,255,255,0.8)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                border: '1px solid rgba(0,0,0,0.06)',
+                borderRadius: '0 14px 14px 14px',
+                padding: '10px 12px',
+                display: 'inline-block',
+                maxWidth: '100%',
+              }}>
+                <p style={{
+                  fontSize: 13, color: '#111', lineHeight: 1.5, margin: 0,
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                }}>
+                  {post.content}
+                </p>
               </div>
+              {reactionsBar}
             </div>
           )
         })}
@@ -711,11 +796,15 @@ export default function PlanDetail({ navigate, planId }) {
           </div>
         )}
 
-        <div className="h-6" />
+        {/* Extra clearance so the last post isn't hidden behind the fixed
+            comment input row (~80px) + mobile nav (~88px). On desktop the
+            sidebar nav means only the comment row eats space (~80px). */}
+        <div className="h-[160px] md:h-[80px]" />
       </div>
 
-      {/* Comment input — sits above the nav bar, outside the scroll area */}
-      <div className="px-4 py-2.5 border-t border-black/[0.04] bg-[rgba(255,251,245,0.95)] backdrop-blur z-20">
+      {/* Comment input — pinned to viewport bottom, above the mobile nav bar
+          (or flush to bottom on desktop where the nav is a left sidebar). */}
+      <div className="fixed bottom-[88px] md:bottom-0 left-0 right-0 md:left-[220px] z-40 px-4 py-3 border-t border-black/[0.06] bg-[rgba(255,251,245,0.95)] backdrop-blur">
         {editingPost && (
           <div className="flex items-center justify-between mb-2 px-1">
             <span className="text-[11px] text-primary font-semibold">Editing…</span>
@@ -724,7 +813,7 @@ export default function PlanDetail({ navigate, planId }) {
             </button>
           </div>
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 max-w-[680px] mx-auto">
           <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-base flex-shrink-0">
             {profile?.emoji || '😎'}
           </div>
@@ -778,6 +867,63 @@ export default function PlanDetail({ navigate, planId }) {
             className="absolute bottom-[88px] left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-full text-[12px] font-semibold z-40 shadow-lg whitespace-nowrap"
           >
             Plan deleted
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Photo lightbox */}
+      <AnimatePresence>
+        {lightbox && (
+          <motion.div
+            key="lightbox"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setLightbox(null)}
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)',
+              zIndex: 1000, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <button
+              onClick={(e) => { e.stopPropagation(); setLightbox(null) }}
+              aria-label="Close lightbox"
+              style={{
+                position: 'absolute', top: 20, right: 20,
+                background: 'rgba(255,255,255,0.1)', border: 'none',
+                borderRadius: '50%', width: 36, height: 36,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <i className="ti ti-x" style={{ fontSize: 18, color: '#fff' }} />
+            </button>
+            <img
+              src={lightbox.photos[lightbox.index]}
+              alt=""
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: '100%', maxHeight: '85vh',
+                objectFit: 'contain', borderRadius: 12,
+              }}
+            />
+            {lightbox.photos.length > 1 && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ display: 'flex', gap: 6, marginTop: 16 }}
+              >
+                {lightbox.photos.map((_, i) => (
+                  <div
+                    key={i}
+                    onClick={() => setLightbox(p => p ? { ...p, index: i } : p)}
+                    style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      background: i === lightbox.index ? '#fff' : 'rgba(255,255,255,0.3)',
+                      cursor: 'pointer',
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

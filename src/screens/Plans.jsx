@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { NavBar, Pill } from '../components/UI'
+import { NavBar, TopBar, Pill } from '../components/UI'
 
 const TIER_PILL_VARIANT = { 1: 'gold', 2: 'orange', 3: 'neutral' }
 const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' }
@@ -187,6 +187,7 @@ export default function Plans({ navigate }) {
 
   return (
     <div className="phone-shell">
+      <TopBar navigate={navigate} />
       <div className="orb" style={{ width: 180, height: 180, background: '#FDE68A', top: -50, right: -40, opacity: 0.45 }} />
       <div className="orb" style={{ width: 140, height: 140, background: '#BAE6FD', top: 280, left: -40, opacity: 0.35 }} />
 

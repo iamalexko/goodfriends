@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { NavBar, BackButton, Pill } from '../components/UI'
+import { NavBar, TopBar, BackButton, Pill } from '../components/UI'
 
 export default function Summary({ navigate }) {
   const [group, setGroup] = useState(null)
@@ -51,6 +51,7 @@ export default function Summary({ navigate }) {
 
   return (
     <div className="phone-shell">
+      <TopBar navigate={navigate} />
       <div className="orb" style={{ width:220, height:220, background:'#FDE68A', top:-70, right:-60, opacity:0.5 }} />
       <div className="orb" style={{ width:160, height:160, background:'#BAE6FD', bottom:120, left:-50, opacity:0.4 }} />
 

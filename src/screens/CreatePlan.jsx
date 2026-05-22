@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { NavBar, BackButton, EmojiAvatar } from '../components/UI'
+import { NavBar, TopBar, BackButton, EmojiAvatar } from '../components/UI'
 
 const TIERS = [
   { id: 1, emoji: '🎉', label: 'Big deal', desc: 'Special occasion · advance booking · dress up', pts: '3× points · planner bonus', bg: 'bg-[#FFFBEB]', color: 'text-[#92400E]' },
@@ -88,6 +88,7 @@ export default function CreatePlan({ navigate }) {
 
   return (
     <div className="phone-shell">
+      <TopBar navigate={navigate} />
       <div className="orb" style={{ width:180, height:180, background:'#FDE68A', top:-50, right:-40, opacity:0.45 }} />
 
       <div className="px-5 pt-4 pb-4 relative z-10">
