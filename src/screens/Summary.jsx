@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { NavBar, TopBar, BackButton, Pill } from '../components/UI'
+import { NavBar, TopBar, BackButton, Pill, Loader } from '../components/UI'
 
 export default function Summary({ navigate }) {
   const [group, setGroup] = useState(null)
@@ -66,7 +66,7 @@ export default function Summary({ navigate }) {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20"><div className="text-4xl animate-spin">⚡</div></div>
+          <Loader size="lg" />
         ) : (
           <>
             <motion.div initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} className="px-5 mb-4">

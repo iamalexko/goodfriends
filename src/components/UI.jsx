@@ -189,6 +189,71 @@ export function Orb({ color, size, top, right, bottom, left, opacity = 0.5 }) {
   )
 }
 
+// Branded loader — wordmark + pulsing orange dot.
+// fullScreen=true: centres in the viewport (used by the auth gate in App.jsx).
+// inline (default): centres within its parent container; tune size via `size`.
+export function Loader({ fullScreen = false, size = 'md', label }) {
+  const sizes = {
+    sm: { font: 14, dot: 4, gap: 8, py: 24 },
+    md: { font: 18, dot: 5, gap: 10, py: 48 },
+    lg: { font: 22, dot: 6, gap: 12, py: 64 },
+  }
+  const s = sizes[size] || sizes.md
+
+  const inner = (
+    <>
+      <div
+        style={{
+          fontFamily: '"Plus Jakarta Sans", sans-serif',
+          fontSize: s.font,
+          fontWeight: 800,
+          color: '#111',
+          letterSpacing: '-0.4px',
+        }}
+      >
+        Goodfriends.
+      </div>
+      <div
+        style={{
+          width: s.dot, height: s.dot, borderRadius: '50%',
+          background: '#FB923C',
+          animation: 'pulse 1.2s ease-in-out infinite',
+        }}
+      />
+      {label && (
+        <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>{label}</div>
+      )}
+    </>
+  )
+
+  if (fullScreen) {
+    return (
+      <div
+        style={{
+          width: '100%', minHeight: '100vh',
+          background: '#FFFBF5',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: s.gap,
+        }}
+      >
+        {inner}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: s.gap, paddingTop: s.py, paddingBottom: s.py,
+      }}
+    >
+      {inner}
+    </div>
+  )
+}
+
 export function StatCell({ value, label, color = 'text-ink' }) {
   return (
     <div className="bg-white/80 backdrop-blur border border-black/[0.06] rounded-2xl py-3 px-2 text-center">

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { NavBar, TopBar, Pill, StatCell } from '../components/UI'
+import { NavBar, TopBar, Pill, StatCell, Loader } from '../components/UI'
 
 export default function Profile({ navigate }) {
   const { profile } = useAuth()
@@ -92,7 +92,7 @@ export default function Profile({ navigate }) {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-6"><div className="text-2xl animate-spin">⚡</div></div>
+          <Loader size="sm" />
         ) : history.length === 0 ? (
           <div className="px-5 py-6 text-center">
             <div className="text-3xl mb-2">🎯</div>
