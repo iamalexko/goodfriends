@@ -20,7 +20,18 @@ function Shell({ children }) {
     <div className="phone-shell">
       <div className="orb" style={{ width:200, height:200, background:'#FDE68A', top:-60, right:-50, opacity:0.5 }} />
       <div className="orb" style={{ width:150, height:150, background:'#BAE6FD', bottom:100, left:-40, opacity:0.4 }} />
-      <div className="flex-1 flex flex-col px-7 pt-8 pb-8 relative z-10 overflow-hidden">
+      <div className="px-7 pt-6 relative z-10">
+        <div
+          style={{
+            fontFamily: '"Plus Jakarta Sans", sans-serif',
+            fontSize: 14, fontWeight: 800,
+            color: '#111', letterSpacing: '-0.3px',
+          }}
+        >
+          Goodfriends.
+        </div>
+      </div>
+      <div className="flex-1 flex flex-col px-7 pt-4 pb-8 relative z-10 overflow-hidden">
         {children}
       </div>
     </div>

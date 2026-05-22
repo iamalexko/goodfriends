@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { NavBar, TopBar, EmojiAvatar, Pill, SectionHeader } from '../components/UI'
 
-const TIER_PILL = { 1: 'gold', 2: 'orange', 3: 'neutral' }
+const TIER_PILL = { 1: 'tier1', 2: 'tier2', 3: 'tier3' }
 const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' }
 
 function PlanCard({ plan, onPress, index }) {
@@ -158,7 +158,18 @@ export default function Home({ navigate }) {
       >
         <div className="text-[9px] text-[#bbb] font-medium uppercase tracking-wider mb-1">{day} · Dubai</div>
         <div className="flex items-center justify-between gap-3">
-          <div className="font-display text-[22px] font-black italic text-ink leading-tight min-w-0 truncate">
+          <div
+            className="min-w-0 truncate"
+            style={{
+              fontFamily: '"Plus Jakarta Sans", sans-serif',
+              fontSize: 22,
+              fontWeight: 700,
+              fontStyle: 'normal',
+              letterSpacing: '-0.4px',
+              color: '#111',
+              lineHeight: 1.15,
+            }}
+          >
             Hey {firstName} {profile?.emoji || '👋'}
           </div>
           {group && (
