@@ -364,6 +364,7 @@ create table public.posts (
   user_id uuid references public.profiles(id) on delete cascade,
   type text check (type in ('photo','comment')) not null,
   content text,
+  caption text,    -- Optional caption when type='photo'; null for comments
   image_url text,
   created_at timestamp with time zone default now()
 );
