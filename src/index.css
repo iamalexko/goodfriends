@@ -20,40 +20,47 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body {
-  background: #E8E4DC;
+  margin: 0;
+  padding: 0;
   min-height: 100vh;
+  background: #FFFBF5;
   font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
 }
 
 #root {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
   min-height: 100vh;
-  padding: 24px 16px 40px;
-}
-
-.phone-shell {
-  width: 375px;
-  min-height: 812px;
-  background: var(--base);
-  border-radius: 44px;
-  overflow: hidden;
-  border: 1px solid rgba(0,0,0,0.1);
-  box-shadow: 0 32px 80px rgba(0,0,0,0.15);
-  position: relative;
   display: flex;
   flex-direction: column;
+  padding: 0;
+  background: #FFFBF5;
 }
 
-/* Scrollable content area */
-.scroll-area {
-  flex: 1;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+/* Responsive content column — was the fixed 375x812 phone mockup before. */
+.phone-shell {
+  width: 100%;
+  max-width: 680px;
+  min-height: 100vh;
+  margin: 0 auto;
+  background: #FFFBF5;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  position: relative;
 }
-.scroll-area::-webkit-scrollbar { display: none; }
+
+/* scroll-area used to make the inner phone column scroll inside a fixed frame.
+   Now the document handles scroll naturally, so this just adds bottom clearance
+   for the fixed mobile nav (and trims it on desktop where the nav is a sidebar). */
+.scroll-area {
+  padding-bottom: 6rem;
+}
+@media (min-width: 768px) {
+  .scroll-area { padding-bottom: 2rem; }
+}
 
 /* Glass card */
 .glass-card {
@@ -67,14 +74,15 @@ html, body {
 /* Display font */
 .font-display { font-family: 'Plus Jakarta Sans', sans-serif; }
 
-/* Orbs */
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(40px);
-  pointer-events: none;
-  z-index: 0;
+/* Headline scale-up on desktop */
+@media (min-width: 768px) {
+  .display-heading { font-size: 48px; }
 }
+
+/* The per-screen inline orbs are deprecated; App.jsx now renders global
+   fixed orbs once. Neutralize any leftover inline .orb divs across screens
+   so we don't paint blurred blobs twice. */
+.orb { display: none; }
 
 /* Animations */
 @keyframes fadeUp {
