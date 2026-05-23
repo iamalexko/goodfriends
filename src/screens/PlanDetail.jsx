@@ -23,10 +23,48 @@ const TIER_LABEL = { 1: 'Tier 1 · Big deal', 2: 'Tier 2 · Weekend plan', 3: 'T
 const TIER_PILL  = { 1: 'tier1', 2: 'tier2', 3: 'tier3' }
 
 const RSVP_OPTIONS = [
-  { key: 'in',     emoji: '✅', label: "I'm in",  sub: '100% there',  bg: 'bg-[#DCFCE7]' },
-  { key: 'likely', emoji: '🤔', label: 'Likely',   sub: 'pretty sure', bg: 'bg-[#FEF3C7]' },
-  { key: 'maybe',  emoji: '🌀', label: 'Maybe',    sub: 'not sure yet', bg: 'bg-gray-50'   },
+  {
+    key: 'in', emoji: '✅', label: "I'm in", sub: '100% there',
+    active: {
+      background: '#DCFCE7',
+      border: '1.5px solid #16A34A',
+      boxShadow: '0 2px 12px rgba(22,163,74,0.15)',
+    },
+  },
+  {
+    key: 'likely', emoji: '🤔', label: 'Likely', sub: 'pretty sure',
+    active: {
+      background: '#FEF3C7',
+      border: '1.5px solid #F59E0B',
+      boxShadow: '0 2px 12px rgba(245,158,11,0.15)',
+    },
+  },
+  {
+    key: 'maybe', emoji: '🌀', label: 'Maybe', sub: 'not sure yet',
+    active: {
+      background: '#F3F4F6',
+      border: '1.5px solid #9CA3AF',
+      boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+    },
+  },
 ]
+
+// Tile style applied when the option is NOT selected — frosted glass.
+const RSVP_DEFAULT_STYLE = {
+  background: 'rgba(255,255,255,0.65)',
+  backdropFilter: 'blur(32px)',
+  WebkitBackdropFilter: 'blur(32px)',
+  border: '1px solid rgba(255,255,255,0.95)',
+  boxShadow: '0 2px 12px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.04)',
+}
+
+// Geometry shared by all states (active + default).
+const RSVP_BASE_STYLE = {
+  borderRadius: 14,
+  padding: '14px 8px',
+  textAlign: 'center',
+  cursor: 'pointer',
+}
 
 const RSVP_PILL = { in: 'mint', likely: 'yellow', maybe: 'neutral', null: 'neutral' }
 const RSVP_LABEL = { in: "I'm in", likely: 'Likely', maybe: 'Maybe' }
@@ -535,18 +573,36 @@ export default function PlanDetail({ navigate, planId }) {
         {/* RSVP */}
         <SectionHeader>Your RSVP</SectionHeader>
         <div className="grid grid-cols-3 gap-2 px-5 mb-4">
-          {RSVP_OPTIONS.map(opt => (
-            <motion.button
-              key={opt.key}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => setRsvpStatus(opt.key)}
-              className={`${opt.bg} rounded-[14px] p-3 text-center border-2 transition-all ${myRsvp === opt.key ? 'border-ink' : 'border-transparent'}`}
-            >
-              <div className="text-[24px] mb-1">{opt.emoji}</div>
-              <div className="font-display font-extrabold text-[12px] text-ink">{opt.label}</div>
-              <div className="text-[10px] text-[#aaa] mt-0.5">{opt.sub}</div>
-            </motion.button>
-          ))}
+          {RSVP_OPTIONS.map(opt => {
+            const isActive = myRsvp === opt.key
+            return (
+              <motion.button
+                key={opt.key}
+                type="button"
+                onClick={() => setRsvpStatus(opt.key)}
+                whileHover={{
+                  y: -1,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                  transition: { duration: 0.15 },
+                }}
+                whileTap={{
+                  scale: 0.94,
+                  y: 2,
+                  boxShadow: '0 0px 4px rgba(0,0,0,0.06)',
+                  transition: { duration: 0.1, ease: 'easeIn' },
+                }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                style={{
+                  ...RSVP_BASE_STYLE,
+                  ...(isActive ? opt.active : RSVP_DEFAULT_STYLE),
+                }}
+              >
+                <div style={{ fontSize: 24, marginBottom: 4 }}>{opt.emoji}</div>
+                <div className="font-display font-extrabold text-[12px] text-ink">{opt.label}</div>
+                <div className="text-[10px] text-[#aaa] mt-0.5">{opt.sub}</div>
+              </motion.button>
+            )
+          })}
         </div>
 
         <Divider />
