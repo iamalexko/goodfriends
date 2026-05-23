@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { NavBar, TopBar, BackButton, Pill, EmojiAvatar, Divider, SectionHeader } from '../components/UI'
 
-const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶']
+const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶', '❓']
 
 function formatTimeAgo(dateStr) {
   if (!dateStr) return ''
