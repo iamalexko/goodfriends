@@ -169,18 +169,36 @@ export default function Crew({ navigate }) {
   const scoredMembers = members.filter(m => m.hasScore && (m.score.attendance_rate || 0) > 0)
   const noRealData = scoredMembers.length === 0
   const memberCount = members.length
+  const avgAttendance = stats.avgAttendance
 
-  // Group-level identity tags. Same shape as member tags but derived from
-  // group stats — capped at 3, with "rooftop lovers" as a fallback so the
-  // row never looks empty.
-  const groupTags = []
-  if ((stats.avgAttendance || 0) >= 80) {
-    groupTags.push({ label: 'always shows up', bg: '#DCFCE7', color: '#166534' })
+  // Group-level identity tags. Caps at 3 and falls back to a generic
+  // "Dubai crew" tag when no other criteria match so the row is never empty.
+  function getGroupTags(rate, totalPlans, allMembers) {
+    const tags = []
+
+    if (rate >= 80)
+      tags.push({ label: 'always shows up', bg: '#DCFCE7', color: '#166534' })
+
+    if (totalPlans >= 10)
+      tags.push({ label: 'big planners', bg: '#FFFBEB', color: '#78350F' })
+
+    const rideOrDie = allMembers.filter(m => {
+      const streak = m.score?.streak || []
+      return streak.slice(-3).filter(Boolean).length >= 3
+    })
+    if (rideOrDie.length >= 2)
+      tags.push({ label: 'ride or die crew', bg: '#FDF2F8', color: '#9D174D' })
+
+    if (totalPlans < 5)
+      tags.push({ label: 'new crew', bg: '#EEF2FF', color: '#3730A3' })
+
+    if (tags.length === 0)
+      tags.push({ label: 'Dubai crew', bg: '#F3F4F6', color: '#6B7280' })
+
+    return tags.slice(0, 3)
   }
-  if ((stats.plans || 0) >= 5) {
-    groupTags.push({ label: 'big planners', bg: '#FFFBEB', color: '#78350F' })
-  }
-  groupTags.push({ label: 'rooftop lovers', bg: '#F3F4F6', color: '#6B7280' })
+
+  const groupTags = getGroupTags(avgAttendance, stats.plans, members)
 
   return (
     <div className="phone-shell">
@@ -202,71 +220,78 @@ export default function Crew({ navigate }) {
           <div className="flex items-center justify-center py-20"><div className="text-4xl animate-spin">⚡</div></div>
         ) : (
           <>
-            {/* Compact centred identity header */}
+            {/* Compact inline identity header — no card, no border, no background */}
             <motion.div
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              style={{
-                textAlign: 'center',
-                padding: '14px 20px 12px',
-                position: 'relative', zIndex: 1,
-              }}
+              style={{ padding: '12px 20px 0', position: 'relative', zIndex: 1 }}
             >
-              {/* Group emoji — still clickable to open the picker */}
-              <button
-                type="button"
-                onClick={() => group?.id && setEmojiPickerOpen(true)}
-                disabled={!group?.id}
-                aria-label="Change group emoji"
-                style={{
-                  background: 'none', border: 'none', padding: 0,
-                  fontSize: 36, lineHeight: 1, marginBottom: 6,
-                  cursor: group?.id ? 'pointer' : 'default',
-                }}
-              >
-                {group?.emoji || '🎉'}
-              </button>
+              {/* Row 1: emoji + name left, big rate right */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                {/* Emoji — clickable to open picker */}
+                <button
+                  type="button"
+                  onClick={() => group?.id && setEmojiPickerOpen(true)}
+                  disabled={!group?.id}
+                  aria-label="Change group emoji"
+                  style={{
+                    background: 'none', border: 'none', padding: 0,
+                    fontSize: 22, lineHeight: 1, flexShrink: 0,
+                    cursor: group?.id ? 'pointer' : 'default',
+                  }}
+                >
+                  {group?.emoji || '🎉'}
+                </button>
 
-              {/* Group name */}
+                {/* Name + members */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                    fontSize: 16, fontWeight: 800, color: '#111',
+                    letterSpacing: '-0.3px', lineHeight: 1,
+                  }}>
+                    {group?.name}
+                  </div>
+                  <div style={{ fontSize: 9, color: '#aaa', marginTop: 2 }}>
+                    {memberCount} members · Dubai
+                  </div>
+                </div>
+
+                {/* Rate — right aligned, prominent */}
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{
+                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                    fontSize: 30, fontWeight: 900, color: '#34D399',
+                    letterSpacing: '-1px', lineHeight: 1,
+                  }}>
+                    {avgAttendance ? `${avgAttendance}%` : '—'}
+                  </div>
+                  <div style={{
+                    fontSize: 8, color: '#aaa', fontWeight: 600,
+                    textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2,
+                  }}>
+                    show-up
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 2: tags + thin divider */}
               <div style={{
-                fontFamily: '"Plus Jakarta Sans", sans-serif',
-                fontSize: 20, fontWeight: 800, color: '#111',
-                letterSpacing: '-0.4px', lineHeight: 1, marginBottom: 4,
+                display: 'flex', gap: 4, flexWrap: 'wrap',
+                paddingBottom: 12,
+                borderBottom: '1px solid rgba(0,0,0,0.05)',
+                marginBottom: 16,
               }}>
-                {group?.name}
-              </div>
-
-              {/* Member count */}
-              <div style={{ fontSize: 11, color: '#aaa', fontWeight: 500, marginBottom: 8 }}>
-                {memberCount} members · Dubai
-              </div>
-
-              {/* Attendance rate pill */}
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                background: '#DCFCE7', borderRadius: 999,
-                padding: '3px 10px', marginBottom: 8,
-              }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#34D399' }} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#166534' }}>
-                  {stats.avgAttendance ? `${stats.avgAttendance}% avg show-up` : '— avg show-up'}
-                </span>
-              </div>
-
-              {/* Identity tags */}
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 5, flexWrap: 'wrap' }}>
                 {groupTags.map(tag => (
                   <span key={tag.label} style={{
-                    fontSize: 10, fontWeight: 700, padding: '2px 8px',
-                    borderRadius: 999, background: tag.bg, color: tag.color,
+                    fontSize: 10, fontWeight: 700,
+                    padding: '2px 8px', borderRadius: 999,
+                    background: tag.bg, color: tag.color,
                   }}>
                     {tag.label}
                   </span>
                 ))}
               </div>
             </motion.div>
-
-            {/* Thin divider */}
-            <div style={{ height: 1, background: 'rgba(0,0,0,0.05)', margin: '0 20px 16px' }} />
 
             {noRealData ? (
               /* Empty state replaces both podium AND race when nobody has any score yet */
@@ -484,13 +509,12 @@ export default function Crew({ navigate }) {
             {/* Stats row — moved from the top of the page so the leaderboard reads first */}
             <div style={{
               display: 'flex', justifyContent: 'space-around',
-              padding: '14px 20px', margin: '8px 20px 24px',
+              padding: '12px 16px', margin: '8px 20px 24px',
               background: 'rgba(255,255,255,0.65)',
               backdropFilter: 'blur(14px)',
               WebkitBackdropFilter: 'blur(14px)',
               border: '1px solid rgba(0,0,0,0.06)',
-              borderRadius: 16,
-              boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+              borderRadius: 14,
             }}>
               {[
                 { value: stats.plans, label: 'plans done', color: '#111' },
@@ -499,14 +523,14 @@ export default function Crew({ navigate }) {
               ].map((s, i) => (
                 <div key={i} style={{ textAlign: 'center' }}>
                   <div style={{
-                    fontFamily: '"Plus Jakarta Sans",sans-serif',
-                    fontSize: 20, fontWeight: 900,
+                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                    fontSize: 18, fontWeight: 900,
                     color: s.color, lineHeight: 1,
                   }}>
                     {s.value}
                   </div>
                   <div style={{
-                    fontSize: 9, color: '#aaa', fontWeight: 600,
+                    fontSize: 8, color: '#aaa', fontWeight: 600,
                     textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3,
                   }}>
                     {s.label}
