@@ -260,7 +260,7 @@ export default function Crew({ navigate }) {
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <div style={{
                     fontFamily: '"Plus Jakarta Sans", sans-serif',
-                    fontSize: 30, fontWeight: 900, color: '#34D399',
+                    fontSize: 22, fontWeight: 900, color: '#34D399',
                     letterSpacing: '-1px', lineHeight: 1,
                   }}>
                     {avgAttendance ? `${avgAttendance}%` : '—'}
@@ -517,21 +517,21 @@ export default function Crew({ navigate }) {
               borderRadius: 14,
             }}>
               {[
-                { value: stats.plans, label: 'plans done', color: '#111' },
-                { value: stats.avgAttendance ? `${stats.avgAttendance}%` : '—', label: 'avg show-up', color: '#34D399' },
+                { value: stats.plans,    label: 'plans done', color: '#111' },
+                { value: memberCount,    label: 'members',    color: '#111' },
                 { value: stats.thisMonth, label: 'this month', color: '#FB923C' },
               ].map((s, i) => (
                 <div key={i} style={{ textAlign: 'center' }}>
                   <div style={{
                     fontFamily: '"Plus Jakarta Sans", sans-serif',
-                    fontSize: 18, fontWeight: 900,
+                    fontSize: 14, fontWeight: 900,
                     color: s.color, lineHeight: 1,
                   }}>
                     {s.value}
                   </div>
                   <div style={{
-                    fontSize: 8, color: '#aaa', fontWeight: 600,
-                    textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3,
+                    fontSize: 7, color: '#aaa', fontWeight: 600,
+                    textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2,
                   }}>
                     {s.label}
                   </div>
