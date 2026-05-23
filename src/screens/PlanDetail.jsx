@@ -40,7 +40,7 @@ const RSVP_OPTIONS = [
     },
   },
   {
-    key: 'maybe', emoji: '🌀', label: 'Maybe', sub: 'not sure yet',
+    key: 'no', emoji: '😬', label: 'No', sub: "can't make it",
     active: {
       background: '#F3F4F6',
       border: '1.5px solid #9CA3AF',
@@ -66,8 +66,8 @@ const RSVP_BASE_STYLE = {
   cursor: 'pointer',
 }
 
-const RSVP_PILL = { in: 'mint', likely: 'yellow', maybe: 'neutral', null: 'neutral' }
-const RSVP_LABEL = { in: "I'm in", likely: 'Likely', maybe: 'Maybe' }
+const RSVP_PILL = { in: 'mint', likely: 'yellow', no: 'neutral', null: 'neutral' }
+const RSVP_LABEL = { in: "I'm in", likely: 'Likely', no: 'No' }
 
 export default function PlanDetail({ navigate, planId }) {
   const { profile } = useAuth()
