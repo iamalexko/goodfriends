@@ -109,7 +109,7 @@ create table public.rsvps (
   id uuid default gen_random_uuid() primary key,
   plan_id uuid references public.plans(id) on delete cascade,
   user_id uuid references public.profiles(id) on delete cascade,
-  status text check (status in ('in','likely','maybe')),
+  status text check (status in ('in','likely','no')),
   updated_at timestamp with time zone default now(),
   unique(plan_id, user_id)
 );
