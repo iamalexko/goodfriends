@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { NavBar, TopBar, BackButton, Pill, Divider, StatCell } from '../components/UI'
+import { NavBar, TopBar, BackButton } from '../components/UI'
 
 // Position-based palette: rank in race determines colour, not name.
 const MEMBER_GRADIENTS = [
@@ -168,6 +168,19 @@ export default function Crew({ navigate }) {
 
   const scoredMembers = members.filter(m => m.hasScore && (m.score.attendance_rate || 0) > 0)
   const noRealData = scoredMembers.length === 0
+  const memberCount = members.length
+
+  // Group-level identity tags. Same shape as member tags but derived from
+  // group stats — capped at 3, with "rooftop lovers" as a fallback so the
+  // row never looks empty.
+  const groupTags = []
+  if ((stats.avgAttendance || 0) >= 80) {
+    groupTags.push({ label: 'always shows up', bg: '#DCFCE7', color: '#166534' })
+  }
+  if ((stats.plans || 0) >= 5) {
+    groupTags.push({ label: 'big planners', bg: '#FFFBEB', color: '#78350F' })
+  }
+  groupTags.push({ label: 'rooftop lovers', bg: '#F3F4F6', color: '#6B7280' })
 
   return (
     <div className="phone-shell">
@@ -189,35 +202,71 @@ export default function Crew({ navigate }) {
           <div className="flex items-center justify-center py-20"><div className="text-4xl animate-spin">⚡</div></div>
         ) : (
           <>
-            {/* Group hero */}
-            <motion.div initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} className="glass-card mx-5 mb-4 p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <button
-                  onClick={() => group?.id && setEmojiPickerOpen(true)}
-                  disabled={!group?.id}
-                  aria-label="Change group emoji"
-                  className="w-12 h-12 rounded-[16px] bg-ink flex items-center justify-center text-2xl active:scale-95 transition-transform disabled:opacity-100"
-                >
-                  {group?.emoji || '🎉'}
-                </button>
-                <div>
-                  <div className="font-display text-[22px] font-black text-ink leading-tight">{group?.name || 'Your crew'}</div>
-                  <div className="text-[12px] text-[#aaa]">{members.length} members · Dubai</div>
-                </div>
+            {/* Compact centred identity header */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              style={{
+                textAlign: 'center',
+                padding: '14px 20px 12px',
+                position: 'relative', zIndex: 1,
+              }}
+            >
+              {/* Group emoji — still clickable to open the picker */}
+              <button
+                type="button"
+                onClick={() => group?.id && setEmojiPickerOpen(true)}
+                disabled={!group?.id}
+                aria-label="Change group emoji"
+                style={{
+                  background: 'none', border: 'none', padding: 0,
+                  fontSize: 36, lineHeight: 1, marginBottom: 6,
+                  cursor: group?.id ? 'pointer' : 'default',
+                }}
+              >
+                {group?.emoji || '🎉'}
+              </button>
+
+              {/* Group name */}
+              <div style={{
+                fontFamily: '"Plus Jakarta Sans", sans-serif',
+                fontSize: 20, fontWeight: 800, color: '#111',
+                letterSpacing: '-0.4px', lineHeight: 1, marginBottom: 4,
+              }}>
+                {group?.name}
               </div>
-              <div className="flex gap-1.5 flex-wrap mb-3">
-                <Pill variant="mint">always shows up</Pill>
-                <Pill variant="gold">big planners</Pill>
-                <Pill variant="neutral">rooftop lovers</Pill>
+
+              {/* Member count */}
+              <div style={{ fontSize: 11, color: '#aaa', fontWeight: 500, marginBottom: 8 }}>
+                {memberCount} members · Dubai
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                <StatCell value={stats.plans} label="plans done" />
-                <StatCell value={stats.avgAttendance ? `${stats.avgAttendance}%` : '—'} label="avg show-up" color="text-mint" />
-                <StatCell value={stats.thisMonth} label="this month" color="text-primary" />
+
+              {/* Attendance rate pill */}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: '#DCFCE7', borderRadius: 999,
+                padding: '3px 10px', marginBottom: 8,
+              }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#34D399' }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#166534' }}>
+                  {stats.avgAttendance ? `${stats.avgAttendance}% avg show-up` : '— avg show-up'}
+                </span>
+              </div>
+
+              {/* Identity tags */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 5, flexWrap: 'wrap' }}>
+                {groupTags.map(tag => (
+                  <span key={tag.label} style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px',
+                    borderRadius: 999, background: tag.bg, color: tag.color,
+                  }}>
+                    {tag.label}
+                  </span>
+                ))}
               </div>
             </motion.div>
 
-            <Divider />
+            {/* Thin divider */}
+            <div style={{ height: 1, background: 'rgba(0,0,0,0.05)', margin: '0 20px 16px' }} />
 
             {noRealData ? (
               /* Empty state replaces both podium AND race when nobody has any score yet */
@@ -297,8 +346,11 @@ export default function Crew({ navigate }) {
                   )
                 })()}
 
+                {/* Divider between podium and race */}
+                <div style={{ height: 1, background: 'rgba(0,0,0,0.05)', margin: '0 20px 16px' }} />
+
                 {/* Race */}
-                <div className="flex items-center justify-between px-5 mt-2 mb-3">
+                <div className="flex items-center justify-between px-5 mb-3">
                   <span className="text-[10px] font-bold tracking-widest uppercase text-[#bbb]">show-up race</span>
                   <span className="text-[10px] font-bold text-primary">last 30 days</span>
                 </div>
@@ -414,10 +466,11 @@ export default function Crew({ navigate }) {
               </>
             )}
 
-            <Divider />
+            {/* Divider between race and fresh start */}
+            <div style={{ height: 1, background: 'rgba(0,0,0,0.05)', margin: '0 20px 16px' }} />
 
-            {/* Reset */}
-            <div className="mx-5 mt-4 mb-6 bg-white/60 backdrop-blur border border-black/[0.06] rounded-[18px] p-3.5 flex items-center gap-3">
+            {/* Fresh start */}
+            <div className="mx-5 mb-2 bg-white/60 backdrop-blur border border-black/[0.06] rounded-[18px] p-3.5 flex items-center gap-3">
               <div className="w-9 h-9 rounded-[12px] bg-[#F5F0E8] flex items-center justify-center flex-shrink-0">
                 <i className="ti ti-refresh text-[#bbb] text-lg" />
               </div>
@@ -426,6 +479,40 @@ export default function Crew({ navigate }) {
                 <div className="text-[10px] text-[#aaa] mt-0.5">Wipe scores · your story stays forever</div>
               </div>
               <button className="text-[10px] font-bold text-[#aaa] bg-[#F5F0E8] border-none px-3 py-1.5 rounded-full">Propose</button>
+            </div>
+
+            {/* Stats row — moved from the top of the page so the leaderboard reads first */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-around',
+              padding: '14px 20px', margin: '8px 20px 24px',
+              background: 'rgba(255,255,255,0.65)',
+              backdropFilter: 'blur(14px)',
+              WebkitBackdropFilter: 'blur(14px)',
+              border: '1px solid rgba(0,0,0,0.06)',
+              borderRadius: 16,
+              boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+            }}>
+              {[
+                { value: stats.plans, label: 'plans done', color: '#111' },
+                { value: stats.avgAttendance ? `${stats.avgAttendance}%` : '—', label: 'avg show-up', color: '#34D399' },
+                { value: stats.thisMonth, label: 'this month', color: '#FB923C' },
+              ].map((s, i) => (
+                <div key={i} style={{ textAlign: 'center' }}>
+                  <div style={{
+                    fontFamily: '"Plus Jakarta Sans",sans-serif',
+                    fontSize: 20, fontWeight: 900,
+                    color: s.color, lineHeight: 1,
+                  }}>
+                    {s.value}
+                  </div>
+                  <div style={{
+                    fontSize: 9, color: '#aaa', fontWeight: 600,
+                    textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3,
+                  }}>
+                    {s.label}
+                  </div>
+                </div>
+              ))}
             </div>
           </>
         )}
