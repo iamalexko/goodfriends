@@ -15,6 +15,9 @@ const TYPE_ICON = {
   no_reply_nudge:    { icon: 'ti-alert-circle',  color: '#FB923C', bg: '#FEF3C7' },
   photo_posted:      { icon: 'ti-camera',        color: '#818CF8', bg: '#EEF2FF' },
   reaction_received: { icon: 'ti-mood-happy',    color: '#F472B6', bg: '#FDF2F8' },
+  event_invite_request: { icon: 'ti-user-plus', color: '#FB923C', bg: '#FEF3C7' },
+  event_request_approved: { icon: 'ti-user-check', color: '#34D399', bg: '#DCFCE7' },
+  event_request_rejected: { icon: 'ti-user-x', color: '#EF4444', bg: '#FEE2E2' },
 }
 
 function timeAgo(dateStr) {

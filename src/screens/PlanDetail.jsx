@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X } from 'lucide-react'
+import { Upload, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { NavBar, TopBar, BackButton, Pill, EmojiAvatar, Divider, SectionHeader } from '../components/UI'
@@ -17,6 +17,11 @@ function formatTimeAgo(dateStr) {
   const hrs = Math.floor(mins / 60)
   if (hrs < 24) return `${hrs}h ago`
   return `${Math.floor(hrs / 24)}d ago`
+}
+
+function formatPlanDate(dateStr) {
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleDateString('en-AE', { weekday:'short', day:'numeric', month:'short' })
 }
 
 const TIER_LABEL = { 1: 'Tier 1 · Big deal', 2: 'Tier 2 · Weekend plan', 3: 'Tier 3 · Low-key' }
@@ -69,7 +74,7 @@ const RSVP_BASE_STYLE = {
 const RSVP_PILL = { in: 'mint', likely: 'yellow', no: 'neutral', null: 'neutral' }
 const RSVP_LABEL = { in: "I'm in", likely: 'Likely', no: 'No' }
 
-export default function PlanDetail({ navigate, planId }) {
+export default function PlanDetail({ navigate, planId, fromShareLink = false }) {
   const { profile } = useAuth()
   const [plan, setPlan] = useState(null)
   const [rsvps, setRsvps] = useState([])
@@ -88,6 +93,12 @@ export default function PlanDetail({ navigate, planId }) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [toastVisible, setToastVisible] = useState(false)
+  const [noticeMessage, setNoticeMessage] = useState('')
+  const [shareOpen, setShareOpen] = useState(false)
+  const [requestBusy, setRequestBusy] = useState(false)
+  const [requestError, setRequestError] = useState('')
+  const [inviteRequests, setInviteRequests] = useState([])
+  const [myInviteRequest, setMyInviteRequest] = useState(null)
 
   // Delete sheet state
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -116,12 +127,15 @@ export default function PlanDetail({ navigate, planId }) {
   const composerRef = useRef(null)
   const composerTextRef = useRef(null)
 
+  const isOrganiser = !!currentUserId && plan?.organiser_id === currentUserId
+  const isInvited = !!currentUserId && rsvps.some(r => r.user_id === currentUserId)
+  const canViewFullPlan = !!plan && (isOrganiser || isInvited)
+
   useEffect(() => { loadPlan() }, [planId])
 
   useEffect(() => {
-    if (!planId) return
+    if (!planId || !canViewFullPlan) { setPosts([]); return }
     loadPosts()
-    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id || null))
     const channel = supabase
       .channel('posts-' + planId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts', filter: `plan_id=eq.${planId}` }, loadPosts)
@@ -129,7 +143,7 @@ export default function PlanDetail({ navigate, planId }) {
       .subscribe()
     return () => { supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planId])
+  }, [planId, canViewFullPlan])
 
   // Collapse the composer when the user clicks outside it, but only if there's
   // nothing in flight (no typed text, no attached photo, not editing).
@@ -327,28 +341,58 @@ export default function PlanDetail({ navigate, planId }) {
     setLightbox({ photos, index: Math.min(index, photos.length - 1) })
   }
 
+  async function loadInviteRequests(nextPlan = plan, userId = currentUserId) {
+    if (!nextPlan || !userId) { setInviteRequests([]); setMyInviteRequest(null); return }
+
+    let query = supabase
+      .from('event_invite_requests')
+      .select('*, requester:requester_id(id, display_name, emoji)')
+      .eq('plan_id', nextPlan.id)
+
+    if (nextPlan.organiser_id !== userId) query = query.eq('requester_id', userId)
+
+    const { data, error } = await query.order('created_at', { ascending: true })
+    if (error) {
+      console.error('PlanDetail: failed to load invite requests', error)
+      setRequestError(error.message)
+      setInviteRequests([])
+      setMyInviteRequest(null)
+      return
+    }
+
+    setRequestError('')
+    setInviteRequests(data || [])
+    setMyInviteRequest((data || []).find(r => r.requester_id === userId) || null)
+  }
+
   async function loadPlan() {
     if (!planId) { setLoading(false); return }
+    setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    setCurrentUserId(user?.id || null)
+
     const { data: planData } = await supabase
-      .from('plans').select('*, profiles!organiser_id(display_name, emoji)').eq('id', planId).single()
+      .from('plans').select('*, profiles!organiser_id(display_name, emoji)').eq('id', planId).maybeSingle()
     if (planData) setPlan(planData)
+    else { setPlan(null); setLoading(false); return }
 
     const { data: rsvpData } = await supabase
       .from('rsvps').select('*, profiles(display_name, emoji, id)')
       .eq('plan_id', planId)
-    const { data: { user } } = await supabase.auth.getUser()
     if (rsvpData) {
       setRsvps(rsvpData)
-      const mine = rsvpData.find(r => r.user_id === user.id)
+      const mine = rsvpData.find(r => r.user_id === user?.id)
       setMyRsvp(mine?.status || null)
       const att = {}
       rsvpData.forEach(r => { att[r.user_id] = r.status === 'in' })
       setAttendance(att)
     }
 
+    await loadInviteRequests(planData, user?.id)
+
     // Load nudges this user has sent for this plan. RLS scopes select to
-    // rows where I'm nudger or nudgee — the explicit nudger_id filter
-    // narrows to just the ones I sent, used for the per-row "Nudged Xm ago" hint.
+    // rows where I'm nudger or nudgee; the explicit nudger_id filter narrows
+    // to the ones I sent, used for the per-row "Nudged Xm ago" hint.
     if (user) {
       const { data: nudgeData } = await supabase
         .from('nudges')
@@ -361,7 +405,7 @@ export default function PlanDetail({ navigate, planId }) {
     setLoading(false)
   }
 
-  // 24h cooldown between nudges to the same person on the same plan
+  // 24h cooldown between nudges to the same person on the same plan.
   function canNudge(userId) {
     const existing = nudges.find(n => n.nudgee_id === userId)
     if (!existing) return true
@@ -402,7 +446,7 @@ export default function PlanDetail({ navigate, planId }) {
       return
     }
 
-    // In-app notification — reuses event_invite so the bell icon/label fits.
+    // In-app notification - reuses event_invite so the bell icon/label fits.
     await supabase.rpc('create_notification', {
       p_user_id: targetUserId,
       p_type: 'event_invite',
@@ -419,6 +463,124 @@ export default function PlanDetail({ navigate, planId }) {
       .eq('nudger_id', user.id)
     if (data) setNudges(data)
     setNudging(null)
+  }
+
+  function showNotice(message) {
+    setNoticeMessage(message)
+    setTimeout(() => setNoticeMessage(''), 2000)
+  }
+
+  function getEventShareUrl() {
+    const base = window.location.origin || 'https://goodfriends.app'
+    return `${base}/event/${planId}`
+  }
+
+  function getEventShareText() {
+    const when = [plan?.date ? formatPlanDate(plan.date) : '', plan?.time].filter(Boolean).join(' · ')
+    const where = plan?.location ? ' at ' + plan.location : ''
+    const name = plan?.name || 'Plan'
+    const eventLine = name + (when ? ' is on ' + when : '') + where
+    return [eventLine, 'Open it in Goodfriends:', getEventShareUrl()].join('\n')
+  }
+
+  async function shareNative() {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: plan?.name || 'Goodfriends plan', text: getEventShareText(), url: getEventShareUrl() })
+        setShareOpen(false)
+      } catch {}
+      return
+    }
+    await copyEventLink()
+  }
+
+  async function copyEventLink() {
+    try { await navigator.clipboard?.writeText(getEventShareUrl()) } catch {}
+    showNotice('Event link copied')
+  }
+
+  function shareToWhatsApp() {
+    window.location.href = 'https://wa.me/?text=' + encodeURIComponent(getEventShareText())
+  }
+
+  async function requestInvite() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || !plan || requestBusy || myInviteRequest?.status === 'pending') return
+    setRequestBusy(true)
+    setRequestError('')
+
+    const { data, error } = await supabase
+      .from('event_invite_requests')
+      .upsert(
+        { plan_id: planId, requester_id: user.id, status: 'pending', decided_by: null, decided_at: null },
+        { onConflict: 'plan_id,requester_id' }
+      )
+      .select('*, requester:requester_id(id, display_name, emoji)')
+      .single()
+
+    if (error) {
+      setRequestError(error.message)
+      setRequestBusy(false)
+      return
+    }
+
+    setMyInviteRequest(data)
+    setInviteRequests(prev => [data, ...prev.filter(r => r.id !== data.id)])
+    showNotice('Request sent')
+
+    await supabase.rpc('create_notification', {
+      p_user_id: plan.organiser_id,
+      p_type: 'event_invite_request',
+      p_title: 'Invite request',
+      p_body: `${profile?.display_name || 'Someone'} asked to join ${plan.name}`,
+      p_plan_id: planId,
+      p_actor_id: user.id,
+    })
+
+    setRequestBusy(false)
+  }
+
+  async function decideInviteRequest(request, status) {
+    if (!isOrganiser || requestBusy) return
+    setRequestBusy(true)
+    setRequestError('')
+
+    if (status === 'approved') {
+      const { error: inviteErr } = await supabase
+        .from('rsvps')
+        .upsert(
+          { plan_id: planId, user_id: request.requester_id, status: null },
+          { onConflict: 'plan_id,user_id', ignoreDuplicates: true }
+        )
+      if (inviteErr) { setRequestError(inviteErr.message); setRequestBusy(false); return }
+    }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error } = await supabase
+      .from('event_invite_requests')
+      .update({ status, decided_by: user?.id || null, decided_at: new Date().toISOString() })
+      .eq('id', request.id)
+      .select('*, requester:requester_id(id, display_name, emoji)')
+      .single()
+
+    if (error) { setRequestError(error.message); setRequestBusy(false); return }
+
+    setInviteRequests(prev => prev.map(r => r.id === data.id ? data : r))
+    showNotice(status === 'approved' ? 'Invite sent' : 'Request rejected')
+
+    await supabase.rpc('create_notification', {
+      p_user_id: request.requester_id,
+      p_type: status === 'approved' ? 'event_request_approved' : 'event_request_rejected',
+      p_title: status === 'approved' ? 'You were invited' : 'Request declined',
+      p_body: status === 'approved'
+        ? `${profile?.display_name || 'The planner'} added you to ${plan.name}`
+        : `${profile?.display_name || 'The planner'} declined your request for ${plan.name}`,
+      p_plan_id: status === 'approved' ? planId : null,
+      p_actor_id: user?.id || null,
+    })
+
+    await loadPlan()
+    setRequestBusy(false)
   }
 
   async function setRsvpStatus(status) {
@@ -666,9 +828,6 @@ export default function PlanDetail({ navigate, planId }) {
     navigate('home')
   }
 
-  const { data: { user: currentUser } } = { data: { user: null } }
-  const isOrganiser = plan?.organiser_id === profile?.id
-
   if (loading) return (
     <div className="phone-shell flex items-center justify-center">
       <div className="text-4xl animate-spin">⚡</div>
@@ -677,14 +836,68 @@ export default function PlanDetail({ navigate, planId }) {
 
   if (!plan) return (
     <div className="phone-shell flex flex-col">
+      {fromShareLink && <TopBar navigate={navigate} />}
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center gap-4">
-        <div className="text-5xl">📭</div>
-        <div className="font-display font-black text-[22px] text-ink">No plan selected</div>
-        <p className="text-[13px] text-[#aaa]">Go back to your home feed to pick a plan.</p>
+        <div className="text-5xl">{fromShareLink ? '🔒' : '📭'}</div>
+        <div className="font-display font-black text-[22px] text-ink">
+          {fromShareLink ? 'Private event' : 'No plan selected'}
+        </div>
+        <p className="text-[13px] text-[#aaa] leading-relaxed">
+          {fromShareLink
+            ? 'This event is only visible to members of its crew.'
+            : 'Go back to your home feed to pick a plan.'}
+        </p>
         <button onClick={() => navigate('home')} className="px-6 py-3 bg-ink text-white rounded-full font-semibold text-sm">Back home</button>
       </div>
     </div>
   )
+
+  if (!canViewFullPlan) {
+    const requestStatus = myInviteRequest?.status
+    const isPending = requestStatus === 'pending'
+    const isRejected = requestStatus === 'rejected'
+    const requestDisabled = requestBusy || isPending || isRejected || plan.status !== 'open'
+
+    return (
+      <div className="phone-shell">
+        <TopBar navigate={navigate} />
+        <div className="orb" style={{ width:180, height:180, background:'#FDE68A', top:-50, right:-40, opacity:0.45 }} />
+        <div className="orb" style={{ width:120, height:120, background:'#BAE6FD', top:200, left:-30, opacity:0.35 }} />
+        <div className="min-h-[calc(100vh-64px)] flex flex-col justify-center px-7 pb-16 relative z-10 text-center">
+          <div className="w-16 h-16 rounded-[24px] bg-[#FEF3C7] flex items-center justify-center text-[30px] mx-auto mb-5">🔒</div>
+          <div className="font-display font-black text-[26px] leading-tight text-ink mb-2">You're not invited yet</div>
+          <p className="text-[13px] text-[#888] leading-relaxed mb-5">
+            You're in the crew, but this event is only open to people the planner invited.
+          </p>
+          <div className="glass-card text-left p-4 mb-5">
+            <div className="flex items-center gap-2 mb-2"><Pill variant={TIER_PILL[plan.tier]}>{TIER_LABEL[plan.tier]}</Pill></div>
+            <div className="font-display font-black text-[18px] text-ink leading-tight mb-2">{plan.name}</div>
+            <div className="flex items-center gap-1.5 text-[12px] text-[#aaa] mb-1">
+              <i className="ti ti-calendar text-[13px]" />
+              {[formatPlanDate(plan.date), plan.time].filter(Boolean).join(' · ')}
+            </div>
+            {plan.profiles && (
+              <div className="flex items-center gap-1.5 text-[12px] text-[#aaa]">
+                <i className="ti ti-user text-[13px]" />
+                Planned by <span className="text-primary font-bold ml-0.5">{plan.profiles.display_name}</span>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={requestInvite}
+            disabled={requestDisabled}
+            className="w-full py-4 bg-ink text-white rounded-full font-display font-black text-base disabled:opacity-50"
+          >
+            {requestBusy ? 'Sending…' : isPending ? 'Request sent' : isRejected ? 'Request declined' : plan.status !== 'open' ? 'Event closed' : 'Request invite'}
+          </button>
+          {requestError && <p className="text-red-500 text-xs mt-3">{requestError}</p>}
+          {isPending && <p className="text-[12px] text-[#aaa] leading-relaxed mt-3">The planner will get an in-app notification and can add you from the event page.</p>}
+          <button onClick={() => navigate('home')} className="mt-4 text-[13px] font-semibold text-[#aaa]">Back home</button>
+        </div>
+        <NavBar active="plans" navigate={navigate} />
+      </div>
+    )
+  }
 
   return (
     <div className="phone-shell">
@@ -693,9 +906,18 @@ export default function PlanDetail({ navigate, planId }) {
       <div className="orb" style={{ width:120, height:120, background:'#BAE6FD', top:200, left:-30, opacity:0.35 }} />
 
       <div className="px-5 pt-4 pb-3 relative z-10">
-        <div className="flex items-center gap-3 mb-4">
-          <BackButton onClick={() => navigate('home')} />
-          <Pill variant={TIER_PILL[plan.tier]}>{TIER_LABEL[plan.tier]}</Pill>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <BackButton onClick={() => navigate('home')} />
+            <Pill variant={TIER_PILL[plan.tier]}>{TIER_LABEL[plan.tier]}</Pill>
+          </div>
+          <button
+            onClick={() => setShareOpen(true)}
+            aria-label="Share event"
+            className="w-8 h-8 rounded-full bg-black/5 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
+          >
+            <Upload size={16} strokeWidth={2.4} className="text-ink" />
+          </button>
         </div>
         <div className="flex items-start gap-2 mb-2">
           <div className="font-display text-[28px] font-black text-ink leading-tight flex-1 min-w-0">{plan.name}</div>
@@ -833,6 +1055,54 @@ export default function PlanDetail({ navigate, planId }) {
             </motion.div>
           )
         })}
+
+        {isOrganiser && (
+          <>
+            <Divider />
+            <SectionHeader>Invite requests</SectionHeader>
+            {inviteRequests.length === 0 ? (
+              <div className="mx-5 mb-4 rounded-[16px] bg-white/70 border border-black/[0.06] px-4 py-3">
+                <div className="font-semibold text-[13px] text-ink">No pending requests</div>
+                <div className="text-[11px] text-[#aaa] mt-1">Requests from shared event links will appear here.</div>
+              </div>
+            ) : inviteRequests.map(req => {
+              const status = req.status || 'pending'
+              return (
+                <div key={req.id} className="mx-5 mb-2 rounded-[16px] bg-white/75 border border-black/[0.06] px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <EmojiAvatar emoji={req.requester?.emoji} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-semibold text-ink">{req.requester?.display_name || 'Friend'}</div>
+                      <div className="text-[11px] text-[#aaa] mt-0.5">Wants to be invited to this event</div>
+                    </div>
+                    <Pill variant={status === 'approved' ? 'mint' : status === 'rejected' ? 'red' : 'yellow'}>
+                      {status === 'approved' ? 'Invited' : status === 'rejected' ? 'Rejected' : 'Pending'}
+                    </Pill>
+                  </div>
+                  {status === 'pending' && (
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                      <button
+                        onClick={() => decideInviteRequest(req, 'approved')}
+                        disabled={requestBusy}
+                        className="py-2.5 rounded-full bg-[#DCFCE7] text-[#166534] text-[12px] font-bold disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => decideInviteRequest(req, 'rejected')}
+                        disabled={requestBusy}
+                        className="py-2.5 rounded-full bg-red-50 text-red-600 text-[12px] font-bold disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            {requestError && <p className="text-red-500 text-xs mx-5 mb-3">{requestError}</p>}
+          </>
+        )}
 
         {/* Moments */}
         <Divider />
@@ -1308,6 +1578,39 @@ export default function PlanDetail({ navigate, planId }) {
         </div>
       </div>
 
+      <AnimatePresence>
+        {shareOpen && (
+          <motion.div
+            key="share-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setShareOpen(false)}
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+          >
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#FFFBF5] w-full rounded-t-[32px] px-5 pb-6"
+            >
+              <div className="flex justify-center pt-3 pb-1"><div className="w-8 h-1 rounded-full bg-black/10" /></div>
+              <div className="font-display font-black text-[24px] text-ink pt-3">Share event</div>
+              <p className="text-[13px] text-[#888] leading-relaxed mt-2 mb-4">
+                Send a member-only link. It won't add anyone or RSVP for them.
+              </p>
+              <div className="bg-white/80 border border-black/[0.06] rounded-[18px] p-4 mb-4">
+                <div className="font-display font-extrabold text-[15px] text-ink mb-2">{plan.name}</div>
+                <p className="text-[12px] text-[#888] whitespace-pre-line leading-relaxed m-0">{getEventShareText()}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={shareToWhatsApp} className="py-3.5 rounded-full bg-ink text-white text-[13px] font-display font-black">WhatsApp</button>
+                <button onClick={shareNative} className="py-3.5 rounded-full bg-white border border-black/10 text-ink text-[13px] font-semibold">Native share</button>
+                <button onClick={copyEventLink} className="py-3.5 rounded-full bg-white border border-black/10 text-ink text-[13px] font-semibold col-span-2">Copy link</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <NavBar active="plans" navigate={navigate} />
 
       {/* Success toast (edit) */}
@@ -1322,6 +1625,18 @@ export default function PlanDetail({ navigate, planId }) {
             className="absolute bottom-[88px] left-1/2 -translate-x-1/2 bg-ink text-white px-4 py-2 rounded-full text-[12px] font-semibold z-40 shadow-lg whitespace-nowrap"
           >
             Changes saved ✓
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {noticeMessage && (
+          <motion.div
+            key="notice-toast"
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="absolute bottom-[88px] left-1/2 -translate-x-1/2 bg-ink text-white px-4 py-2 rounded-full text-[12px] font-semibold z-40 shadow-lg whitespace-nowrap"
+          >
+            {noticeMessage}
           </motion.div>
         )}
       </AnimatePresence>

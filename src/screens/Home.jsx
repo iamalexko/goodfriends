@@ -188,19 +188,22 @@ export default function Home({ navigate }) {
       .order('date', { ascending: true })
 
     if (upcomingData) {
+      const visiblePlans = upcomingData
+        .filter(p => p.organiser_id === user.id || p.rsvps.some(r => r.user_id === user.id))
+
       // Look up any nudges *targeting* the current user across the upcoming plans
       // so we can highlight the pending cards organisers have poked us about.
       let incomingNudges = []
-      if (upcomingData.length > 0) {
+      if (visiblePlans.length > 0) {
         const { data } = await supabase
           .from('nudges')
           .select('*, nudger:nudger_id(display_name, emoji)')
           .eq('nudgee_id', user.id)
-          .in('plan_id', upcomingData.map(p => p.id))
+          .in('plan_id', visiblePlans.map(p => p.id))
         incomingNudges = data || []
       }
 
-      const enriched = upcomingData.map(p => {
+      const enriched = visiblePlans.map(p => {
         const confirmed = p.rsvps.filter(r => r.status === 'in')
         const likely = p.rsvps.filter(r => r.status === 'likely')
         const mine = p.rsvps.find(r => r.user_id === user.id)
