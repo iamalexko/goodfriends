@@ -30,6 +30,15 @@ function readJoinPathCode() {
   }
 }
 
+function readEventPathId() {
+  try {
+    const m = window.location.pathname.match(/^\/event\/([^/?#]+)\/?$/)
+    return m ? decodeURIComponent(m[1]) : ''
+  } catch {
+    return ''
+  }
+}
+
 function clearInviteFromUrl() {
   try {
     const url = new URL(window.location.href)
@@ -40,8 +49,9 @@ function clearInviteFromUrl() {
 
 export default function App() {
   const { user, profile, loading } = useAuth()
-  const [screen, setScreen] = useState('home')
-  const [screenParams, setScreenParams] = useState({})
+  const [eventPathId] = useState(readEventPathId)
+  const [screen, setScreen] = useState(eventPathId ? 'plan-detail' : 'home')
+  const [screenParams, setScreenParams] = useState(eventPathId ? { planId: eventPathId, fromShareLink: true } : {})
   const [pendingInvite, setPendingInvite] = useState(readInviteFromUrl)
   const [joinPathCode] = useState(readJoinPathCode)
 
@@ -64,7 +74,12 @@ export default function App() {
   function handleAuthComplete() {
     clearInviteFromUrl()
     setPendingInvite('')
-    setScreen('home')
+    if (eventPathId) {
+      setScreenParams({ planId: eventPathId, fromShareLink: true })
+      setScreen('plan-detail')
+    } else {
+      setScreen('home')
+    }
   }
 
   function navigate(id, params = {}) {
