@@ -20,15 +20,61 @@ function getPriorityScore(plan) {
 
 function PlanCard({ plan, onPress, index }) {
   const isPending = !plan.my_rsvp
+  const nudged = !!plan.nudge
+
+  // Border and CTA colour shift to bubblegum pink when a nudge is in play,
+  // primary orange when pending (no nudge), neutral otherwise.
+  const cardBorder = nudged
+    ? '1.5px solid #FF6EB4'
+    : isPending
+      ? '1.5px solid #FB923C'
+      : '1px solid rgba(0,0,0,0.06)'
+  const ctaColor = nudged ? '#FF6EB4' : '#FB923C'
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06 }}
+      initial={{ opacity: 0, y: 14, x: 0 }}
+      // Standard fade-up for everyone. Nudged cards also get a gentle one-shot
+      // horizontal shake (no loop) to draw the eye, slightly after the fade
+      // settles so it isn't lost in the motion.
+      animate={{
+        opacity: 1,
+        y: 0,
+        x: nudged ? [0, -4, 4, -3, 3, 0] : 0,
+      }}
+      transition={{
+        opacity: { delay: index * 0.06, duration: 0.3 },
+        y: { delay: index * 0.06, duration: 0.3 },
+        x: nudged
+          ? { delay: 0.3 + index * 0.06, duration: 0.4, ease: 'easeInOut' }
+          : { duration: 0 },
+      }}
       onClick={() => onPress(plan)}
-      className={`glass-card mx-5 mb-2.5 p-3.5 cursor-pointer active:scale-[0.99] transition-transform ${isPending ? 'border-[1.5px] border-primary' : ''}`}
+      style={{ border: cardBorder }}
+      className="glass-card mx-5 mb-2.5 p-3.5 cursor-pointer active:scale-[0.99] transition-transform"
     >
-      {isPending && (
+      {/* Bubblegum nudge strip — only on pending cards I've been nudged for.
+          Negative margins pull it flush with the card edges to read as a tab. */}
+      {isPending && nudged && (
+        <div style={{
+          background: '#FFF0F8',
+          borderRadius: '14px 14px 0 0',
+          padding: '6px 14px',
+          margin: '-14px -14px 10px',
+          display: 'flex', alignItems: 'center', gap: 5,
+          borderBottom: '1px solid rgba(255,110,180,0.15)',
+        }}>
+          <span style={{ fontSize: 13 }}>🫷</span>
+          <span style={{
+            fontSize: 10, fontWeight: 600,
+            color: '#C2185B', fontFamily: 'Inter, sans-serif',
+          }}>
+            {plan.nudge.nudger?.display_name} poked you — are you in or not? 👀
+          </span>
+        </div>
+      )}
+
+      {isPending && !nudged && (
         <div className="flex items-center gap-1 text-primary text-[11px] font-bold mb-1.5">
           <i className="ti ti-circle-dot text-xs" /> Waiting for your reply
         </div>
@@ -53,7 +99,7 @@ function PlanCard({ plan, onPress, index }) {
           </span>
         </div>
         {isPending
-          ? <span className="text-[11px] font-bold text-primary">Reply now</span>
+          ? <span style={{ fontSize: 11, fontWeight: 700, color: ctaColor }}>Reply now</span>
           : plan.is_organiser
             ? <span className="text-[10px] text-[#aaa]">You planned this</span>
             : null
@@ -140,10 +186,23 @@ export default function Home({ navigate }) {
       .order('date', { ascending: true })
 
     if (upcomingData) {
+      // Look up any nudges *targeting* the current user across the upcoming plans
+      // so we can highlight the pending cards organisers have poked us about.
+      let incomingNudges = []
+      if (upcomingData.length > 0) {
+        const { data } = await supabase
+          .from('nudges')
+          .select('*, nudger:nudger_id(display_name, emoji)')
+          .eq('nudgee_id', user.id)
+          .in('plan_id', upcomingData.map(p => p.id))
+        incomingNudges = data || []
+      }
+
       const enriched = upcomingData.map(p => {
         const confirmed = p.rsvps.filter(r => r.status === 'in')
         const likely = p.rsvps.filter(r => r.status === 'likely')
         const mine = p.rsvps.find(r => r.user_id === user.id)
+        const nudge = incomingNudges.find(n => n.plan_id === p.id) || null
         return {
           ...p,
           confirmed_count: confirmed.length,
@@ -151,6 +210,7 @@ export default function Home({ navigate }) {
           my_rsvp: mine?.status,
           is_organiser: p.organiser_id === user.id,
           rsvp_faces: confirmed.map(r => r.profiles?.emoji).filter(Boolean),
+          nudge,
         }
       })
       setPlans(enriched)

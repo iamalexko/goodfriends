@@ -95,6 +95,10 @@ export default function PlanDetail({ navigate, planId }) {
   const [deleteError, setDeleteError] = useState('')
   const [deletedToastVisible, setDeletedToastVisible] = useState(false)
 
+  // Nudge state — records of nudges I (the organiser) have sent for this plan
+  const [nudges, setNudges] = useState([])
+  const [nudging, setNudging] = useState(null) // userId currently being nudged
+
   // Moments feed state
   const [posts, setPosts] = useState([])
   const [uploading, setUploading] = useState(false)
@@ -332,16 +336,89 @@ export default function PlanDetail({ navigate, planId }) {
     const { data: rsvpData } = await supabase
       .from('rsvps').select('*, profiles(display_name, emoji, id)')
       .eq('plan_id', planId)
+    const { data: { user } } = await supabase.auth.getUser()
     if (rsvpData) {
       setRsvps(rsvpData)
-      const { data: { user } } = await supabase.auth.getUser()
       const mine = rsvpData.find(r => r.user_id === user.id)
       setMyRsvp(mine?.status || null)
       const att = {}
       rsvpData.forEach(r => { att[r.user_id] = r.status === 'in' })
       setAttendance(att)
     }
+
+    // Load nudges this user has sent for this plan. RLS scopes select to
+    // rows where I'm nudger or nudgee — the explicit nudger_id filter
+    // narrows to just the ones I sent, used for the per-row "Nudged Xm ago" hint.
+    if (user) {
+      const { data: nudgeData } = await supabase
+        .from('nudges')
+        .select('*')
+        .eq('plan_id', planId)
+        .eq('nudger_id', user.id)
+      if (nudgeData) setNudges(nudgeData)
+    }
+
     setLoading(false)
+  }
+
+  // 24h cooldown between nudges to the same person on the same plan
+  function canNudge(userId) {
+    const existing = nudges.find(n => n.nudgee_id === userId)
+    if (!existing) return true
+    const hoursSince = (Date.now() - new Date(existing.created_at).getTime()) / 3600000
+    return hoursSince >= 24
+  }
+
+  function nudgedAgo(userId) {
+    const existing = nudges.find(n => n.nudgee_id === userId)
+    if (!existing) return null
+    const mins = Math.floor((Date.now() - new Date(existing.created_at).getTime()) / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins}m ago`
+    return `${Math.floor(mins / 60)}h ago`
+  }
+
+  async function nudgeMember(targetUserId) {
+    setNudging(targetUserId)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setNudging(null); return }
+
+    // Delete + reinsert so the unique(plan_id, nudger_id, nudgee_id) constraint
+    // doesn't block a re-nudge once the 24h cooldown has elapsed.
+    await supabase.from('nudges')
+      .delete()
+      .eq('plan_id', planId)
+      .eq('nudger_id', user.id)
+      .eq('nudgee_id', targetUserId)
+
+    const { error: insErr } = await supabase.from('nudges').insert({
+      plan_id: planId,
+      nudger_id: user.id,
+      nudgee_id: targetUserId,
+    })
+    if (insErr) {
+      console.error('PlanDetail: nudge insert failed', insErr)
+      setNudging(null)
+      return
+    }
+
+    // In-app notification — reuses event_invite so the bell icon/label fits.
+    await supabase.rpc('create_notification', {
+      p_user_id: targetUserId,
+      p_type: 'event_invite',
+      p_title: `${profile?.display_name || 'Someone'} poked you 🫷`,
+      p_body: `Are you in for ${plan?.name || 'this plan'} or not? 👀`,
+      p_plan_id: planId,
+      p_actor_id: user.id,
+    })
+
+    const { data } = await supabase
+      .from('nudges')
+      .select('*')
+      .eq('plan_id', planId)
+      .eq('nudger_id', user.id)
+    if (data) setNudges(data)
+    setNudging(null)
   }
 
   async function setRsvpStatus(status) {
@@ -697,20 +774,64 @@ export default function PlanDetail({ navigate, planId }) {
 
         {/* Attendees */}
         <SectionHeader>The crew</SectionHeader>
-        {rsvps.map((r, i) => (
-          <motion.div
-            key={r.user_id}
-            initial={{ opacity:0, x:-8 }} animate={{ opacity:1, x:0 }} transition={{ delay: i*0.04 }}
-            className="flex items-center gap-2.5 px-5 py-2"
-          >
-            <EmojiAvatar emoji={r.profiles?.emoji} size="sm" />
-            <span className="flex-1 text-[13px] font-semibold text-ink">{r.profiles?.display_name}</span>
-            {r.status
-              ? <Pill variant={RSVP_PILL[r.status]}>{RSVP_LABEL[r.status]}</Pill>
-              : <Pill variant="neutral">No reply</Pill>
-            }
-          </motion.div>
-        ))}
+        {rsvps.map((r, i) => {
+          const noReply = !r.status
+          const showNudge = isOrganiser && noReply
+          const ago = nudgedAgo(r.user_id)
+          const cooldownOk = canNudge(r.user_id)
+          const isCurrentlyNudging = nudging === r.user_id
+          return (
+            <motion.div
+              key={r.user_id}
+              initial={{ opacity:0, x:-8 }} animate={{ opacity:1, x:0 }} transition={{ delay: i*0.04 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 20px',
+                borderBottom: '1px solid rgba(0,0,0,0.04)',
+              }}
+            >
+              <EmojiAvatar emoji={r.profiles?.emoji} size="sm" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {r.profiles?.display_name}
+                </div>
+                {ago && (
+                  <div style={{ fontSize: 10, color: '#aaa', marginTop: 1 }}>
+                    Nudged {ago}
+                  </div>
+                )}
+              </div>
+              {r.status
+                ? <Pill variant={RSVP_PILL[r.status]}>{RSVP_LABEL[r.status]}</Pill>
+                : <Pill variant="neutral">No reply</Pill>
+              }
+              {showNudge && (
+                <button
+                  onClick={() => cooldownOk && nudgeMember(r.user_id)}
+                  disabled={!cooldownOk || isCurrentlyNudging}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 3,
+                    background: cooldownOk ? '#FFF0F8' : '#f5f5f5',
+                    border: 'none', borderRadius: 999,
+                    padding: '5px 10px',
+                    cursor: cooldownOk ? 'pointer' : 'default',
+                    opacity: isCurrentlyNudging ? 0.6 : 1,
+                  }}
+                  aria-label={`Nudge ${r.profiles?.display_name}`}
+                >
+                  <span style={{ fontSize: 12 }}>🫷</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700,
+                    color: cooldownOk ? '#C2185B' : '#aaa',
+                    fontFamily: 'Inter, sans-serif',
+                  }}>
+                    {isCurrentlyNudging ? 'Nudging…' : cooldownOk ? 'Nudge' : 'Nudged'}
+                  </span>
+                </button>
+              )}
+            </motion.div>
+          )
+        })}
 
         {/* Moments */}
         <Divider />
