@@ -400,14 +400,15 @@ export default function Home({ navigate }) {
         >
           <div
             onClick={e => e.stopPropagation()}
-            // Anchor the sheet's bottom above the mobile nav (calc matches the
-            // composer offset used elsewhere). On desktop the nav is a left
-            // sidebar, so bottom: 0.
-            className="absolute left-0 right-0 bottom-[calc(68px+max(8px,env(safe-area-inset-bottom)))] md:bottom-0"
+            // Sit flush at viewport bottom (covers the nav while open, which
+            // is the expected mobile-modal behaviour). The inner bottom
+            // padding uses env(safe-area-inset-bottom) so the iPhone home
+            // indicator doesn't overlap the last sort row.
             style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
               maxWidth: 680, margin: '0 auto',
               background: '#FFFBF5', borderRadius: '24px 24px 0 0',
-              padding: '16px 20px 48px',
+              padding: '16px 20px calc(24px + env(safe-area-inset-bottom))',
             }}
           >
             <div style={{

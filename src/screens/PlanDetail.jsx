@@ -1590,7 +1590,7 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 320, damping: 32 }}
               onClick={e => e.stopPropagation()}
-              className="bg-[#FFFBF5] w-full rounded-t-[32px] px-5 pb-6"
+              className="bg-[#FFFBF5] w-full rounded-t-[32px] px-5 pb-[max(24px,env(safe-area-inset-bottom))]"
             >
               <div className="flex justify-center pt-3 pb-1"><div className="w-8 h-1 rounded-full bg-black/10" /></div>
               <div className="font-display font-black text-[24px] text-ink pt-3">Share event</div>
@@ -1721,13 +1721,13 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
             key="post-action-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => setActionSheetPost(null)}
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end pb-[calc(68px+max(8px,env(safe-area-inset-bottom)))] md:pb-0"
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
           >
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 320, damping: 32 }}
               onClick={e => e.stopPropagation()}
-              className="bg-[#FFFBF5] w-full rounded-t-[32px] pb-6"
+              className="bg-[#FFFBF5] w-full rounded-t-[32px] pb-[max(24px,env(safe-area-inset-bottom))]"
             >
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-8 h-1 rounded-full bg-black/10" />
@@ -1771,13 +1771,13 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
             key="delete-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => !deleting && setDeleteOpen(false)}
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end pb-[calc(68px+max(8px,env(safe-area-inset-bottom)))] md:pb-0"
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
           >
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 320, damping: 32 }}
               onClick={e => e.stopPropagation()}
-              className="bg-[#FFFBF5] w-full rounded-t-[32px] flex flex-col px-5 pb-6"
+              className="bg-[#FFFBF5] w-full rounded-t-[32px] flex flex-col px-5 pb-[max(24px,env(safe-area-inset-bottom))]"
             >
               {/* Drag handle */}
               <div className="flex justify-center pt-3 pb-1">
@@ -1823,7 +1823,7 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
             key="edit-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => !saving && setEditOpen(false)}
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end pb-[calc(68px+max(8px,env(safe-area-inset-bottom)))] md:pb-0"
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
           >
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
@@ -1943,7 +1943,7 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
               </div>
 
               {/* Save footer */}
-              <div className="px-5 pt-3 pb-5 border-t border-black/[0.04] flex-shrink-0">
+              <div className="px-5 pt-3 pb-[max(20px,env(safe-area-inset-bottom))] border-t border-black/[0.04] flex-shrink-0">
                 {saveError && <p className="text-red-500 text-xs mb-2 text-center">{saveError}</p>}
                 <button
                   onClick={saveEdits}
