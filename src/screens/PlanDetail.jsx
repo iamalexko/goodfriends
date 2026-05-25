@@ -1584,7 +1584,7 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
             key="share-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => setShareOpen(false)}
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
           >
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
@@ -1721,7 +1721,7 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
             key="post-action-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => setActionSheetPost(null)}
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
           >
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
@@ -1771,7 +1771,7 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
             key="delete-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => !deleting && setDeleteOpen(false)}
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
           >
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
@@ -1823,7 +1823,7 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
             key="edit-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => !saving && setEditOpen(false)}
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
           >
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
