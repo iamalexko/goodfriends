@@ -2,6 +2,10 @@
 
 Show up. Be remembered.
 
+A social commitment app for a friend crew. Plan things, RSVP, show up, get points, climb the leaderboard. Built on React + Supabase, deploys to Vercel.
+
+→ For architecture, gotchas, and how to extend things, read [`HANDOFF.md`](./HANDOFF.md).
+
 ## Setup (do this once)
 
 ### 1. Run the database schema
@@ -9,27 +13,27 @@ Show up. Be remembered.
 - Paste the contents of `supabase-schema.sql`
 - Click Run
 
-### 2. Enable Phone Auth in Supabase
-- Go to Authentication → Providers → Phone
-- Enable it
-- For testing: enable "Confirm phone" = OFF (so OTP works without Twilio)
-- For production: add Twilio credentials
-
-### 3. Install and run locally
+### 2. Install and run locally
 ```bash
 npm install
 npm run dev
 ```
 Open http://localhost:5173
 
-### 4. Deploy to Vercel
-```bash
-npm install -g vercel
-vercel
+Create `.env.local` first:
 ```
-Then add these environment variables in Vercel dashboard:
-- `VITE_SUPABASE_URL` = https://ligemjbtjpqmrrwyiiyu.supabase.co
-- `VITE_SUPABASE_ANON_KEY` = sb_publishable_hhoJDZ5D-V_rtcsbMPrSGA_rBSmvq1t
+VITE_SUPABASE_URL=https://ligemjbtjpqmrrwyiiyu.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_hhoJDZ5D-V_rtcsbMPrSGA_rBSmvq1t
+```
+
+### 3. Deploy to Vercel
+Auto-deploys from `main`. Add the two env vars above in the Vercel dashboard.
+
+### 4. (Optional) Deploy the daily reminder edge function
+```bash
+supabase functions deploy send-reminders
+```
+Already deployed in prod and scheduled via `pg_cron` to run daily at 5 UTC (9am Dubai).
 
 ## Project structure
 ```
@@ -39,33 +43,45 @@ src/
   lib/
     supabase.js         ← supabase client
   components/
-    UI.jsx              ← shared components (StatusBar, NavBar, Pill, etc)
+    UI.jsx              ← TopBar (w/ live bell badge), NavBar, Pill, EmojiAvatar, etc
   screens/
-    Onboarding.jsx      ← phone OTP + emoji picker + group join
-    Home.jsx            ← feed with live plans
-    Crew.jsx            ← race bars + hall of fame
+    Auth.jsx            ← email + password sign-in / sign-up
+    Home.jsx            ← upcoming + past plans, urgency/date/tier sort
+    Crew.jsx            ← podium, race bars, identity tags, stats
     CreatePlan.jsx      ← tier picker + form + invite
-    PlanDetail.jsx      ← RSVP + close event
-    Profile.jsx         ← scores + history
+    PlanDetail.jsx      ← RSVP + edit + delete + moments feed + close event
+    Plans.jsx           ← all-plans list
+    Profile.jsx         ← scores + history + emoji picker
     Summary.jsx         ← monthly recap
-  App.jsx               ← router
+    Notifications.jsx   ← bell-icon feed
+    JoinPage.jsx        ← public /join/:code invite redemption
+  App.jsx               ← custom switch-based router (react-router is in deps but unused)
   main.jsx              ← entry point
-  index.css             ← design tokens + animations
+  index.css             ← design tokens + .glass-card / .orb / .phone-shell
+supabase/
+  functions/send-reminders/index.ts   ← daily reminders + no-reply nudges
+  config.toml
 ```
 
 ## What's working
-- Phone OTP auth
-- Create groups and invite by link
-- Create plans (all 3 tiers)
-- RSVP with tiered responses
-- Close events + record attendance
+- Email + password auth, profile with emoji (tap avatar on Profile to change)
+- Create + join groups via shareable `/join/:code` link
+- Create plans (all 3 tiers) and invite your crew
+- RSVP — in / likely / no — with optimistic updates everywhere
+- Edit plan (rename, reschedule, add/remove invitees)
+- Delete plan with cancellation notifications to invitees
+- Close events + record attendance + score recalculation
 - Points + score calculation
-- Crew dashboard with real race bars
-- Profile with real history
+- Crew dashboard: podium, race, identity tags, monthly stats
+- Profile with score history
+- Moments feed on each plan: photo posts + text comments + emoji reactions
+- Home sort control: urgency / date / tier (bottom sheet)
+- **Notifications system** — in-app feed, live bell badge via Supabase Realtime:
+  - Reactive: invite, RSVP change, event filling, close, comment, photo, reaction, cancellation
+  - Daily cron (edge function): tomorrow reminders, no-reply nudges to organisers
 
 ## Next things to build
-- Group invite flow (share link → join)
-- Push notifications for commit chain nudges
-- Photo upload to plan feed
-- Monthly summary AI generation (Claude API)
-- Grace pass mechanic
+- Group invite share UX (a real share sheet rather than copying the raw URL)
+- Push notifications (web push / Twilio / Expo — WhatsApp layered on top)
+- Monthly summary AI generation (Claude API from an edge function)
+- Grace pass mechanic (one missed event doesn't break the streak)
