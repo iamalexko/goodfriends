@@ -9,6 +9,7 @@ const TYPE_ICON = {
   event_rsvp:        { icon: 'ti-check',         color: '#34D399', bg: '#DCFCE7' },
   event_comment:     { icon: 'ti-message',       color: '#818CF8', bg: '#EEF2FF' },
   event_closed:      { icon: 'ti-circle-check',  color: '#34D399', bg: '#DCFCE7' },
+  event_cancelled:   { icon: 'ti-circle-x',      color: '#EF4444', bg: '#FEE2E2' },
   event_reminder:    { icon: 'ti-clock',         color: '#FB923C', bg: '#FEF3C7' },
   event_filling:    { icon: 'ti-trending-up',    color: '#F472B6', bg: '#FDF2F8' },
   no_reply_nudge:    { icon: 'ti-alert-circle',  color: '#FB923C', bg: '#FEF3C7' },

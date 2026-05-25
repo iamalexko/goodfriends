@@ -470,6 +470,25 @@ export default function PlanDetail({ navigate, planId }) {
     setDeleteError('')
     setDeleting(true)
 
+    // Only notify on cancellation of an OPEN (future) plan. Deleting a closed
+    // plan is record-cleanup, not a cancellation.
+    if (plan?.status === 'open') {
+      const { data: { user: cancelUser } } = await supabase.auth.getUser()
+      // plan_id is intentionally null because the row is about to be deleted
+      // and the notifications FK cascades. Body carries the plan name so the
+      // notification still makes sense after the plan is gone.
+      for (const r of rsvps) {
+        await supabase.rpc('create_notification', {
+          p_user_id: r.user_id,
+          p_type: 'event_cancelled',
+          p_title: 'Plan cancelled ❌',
+          p_body: `${profile?.display_name || 'The organiser'} cancelled ${plan.name}`,
+          p_plan_id: null,
+          p_actor_id: cancelUser?.id,
+        })
+      }
+    }
+
     // Order matters: child rows first (rsvps + attendances), then the plan itself.
     // Even with ON DELETE CASCADE on the FKs we issue these explicitly so RLS
     // failures on child tables surface as a clear error instead of cascading silently.
