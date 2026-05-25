@@ -20,32 +20,33 @@ function getPriorityScore(plan) {
 
 function PlanCard({ plan, onPress, index }) {
   const isPending = !plan.my_rsvp
-  const nudged = !!plan.nudge
+  // A nudge only counts as "active" while the user hasn't replied. Once they
+  // RSVP, the card goes back to default styling — the nudge did its job and
+  // dragging extra pink attention to a replied event is just noise.
+  const activeNudge = isPending && !!plan.nudge
 
-  // Border and CTA colour shift to bubblegum pink when a nudge is in play,
-  // primary orange when pending (no nudge), neutral otherwise.
-  const cardBorder = nudged
+  const cardBorder = activeNudge
     ? '1.5px solid #FF6EB4'
     : isPending
       ? '1.5px solid #FB923C'
       : '1px solid rgba(0,0,0,0.06)'
-  const ctaColor = nudged ? '#FF6EB4' : '#FB923C'
+  const ctaColor = activeNudge ? '#FF6EB4' : '#FB923C'
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 14, x: 0 }}
-      // Standard fade-up for everyone. Nudged cards also get a gentle one-shot
-      // horizontal shake (no loop) to draw the eye, slightly after the fade
-      // settles so it isn't lost in the motion.
+      // Standard fade-up for everyone. Active-nudge cards also get a gentle
+      // one-shot horizontal shake (no loop) to draw the eye, slightly after
+      // the fade settles so it isn't lost in the motion.
       animate={{
         opacity: 1,
         y: 0,
-        x: nudged ? [0, -4, 4, -3, 3, 0] : 0,
+        x: activeNudge ? [0, -4, 4, -3, 3, 0] : 0,
       }}
       transition={{
         opacity: { delay: index * 0.06, duration: 0.3 },
         y: { delay: index * 0.06, duration: 0.3 },
-        x: nudged
+        x: activeNudge
           ? { delay: 0.3 + index * 0.06, duration: 0.4, ease: 'easeInOut' }
           : { duration: 0 },
       }}
@@ -53,18 +54,19 @@ function PlanCard({ plan, onPress, index }) {
       style={{ border: cardBorder }}
       className="glass-card mx-5 mb-2.5 p-3.5 cursor-pointer active:scale-[0.99] transition-transform"
     >
-      {/* Bubblegum nudge strip — only on pending cards I've been nudged for.
-          Negative margins pull it flush with the card edges to read as a tab. */}
-      {isPending && nudged && (
+      {/* Bubblegum nudge strip — only while the nudge is still active.
+          Radius matches .glass-card's 20px so the strip's top corners sit
+          flush with the card's; otherwise the pink border peeks above. */}
+      {activeNudge && (
         <div style={{
           background: '#FFF0F8',
-          borderRadius: '14px 14px 0 0',
+          borderRadius: '20px 20px 0 0',
           padding: '6px 14px',
           margin: '-14px -14px 10px',
           display: 'flex', alignItems: 'center', gap: 5,
           borderBottom: '1px solid rgba(255,110,180,0.15)',
         }}>
-          <span style={{ fontSize: 13 }}>🫷</span>
+          <span style={{ fontSize: 13 }}>👈</span>
           <span style={{
             fontSize: 10, fontWeight: 600,
             color: '#C2185B', fontFamily: 'Inter, sans-serif',
@@ -74,7 +76,7 @@ function PlanCard({ plan, onPress, index }) {
         </div>
       )}
 
-      {isPending && !nudged && (
+      {isPending && !activeNudge && (
         <div className="flex items-center gap-1 text-primary text-[11px] font-bold mb-1.5">
           <i className="ti ti-circle-dot text-xs" /> Waiting for your reply
         </div>
@@ -395,8 +397,11 @@ export default function Home({ navigate }) {
         >
           <div
             onClick={e => e.stopPropagation()}
+            // Anchor the sheet's bottom above the mobile nav (calc matches the
+            // composer offset used elsewhere). On desktop the nav is a left
+            // sidebar, so bottom: 0.
+            className="absolute left-0 right-0 bottom-[calc(68px+max(8px,env(safe-area-inset-bottom)))] md:bottom-0"
             style={{
-              position: 'absolute', bottom: 0, left: 0, right: 0,
               maxWidth: 680, margin: '0 auto',
               background: '#FFFBF5', borderRadius: '24px 24px 0 0',
               padding: '16px 20px 48px',

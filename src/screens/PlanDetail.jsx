@@ -406,7 +406,7 @@ export default function PlanDetail({ navigate, planId }) {
     await supabase.rpc('create_notification', {
       p_user_id: targetUserId,
       p_type: 'event_invite',
-      p_title: `${profile?.display_name || 'Someone'} poked you 🫷`,
+      p_title: `${profile?.display_name || 'Someone'} poked you 👈`,
       p_body: `Are you in for ${plan?.name || 'this plan'} or not? 👀`,
       p_plan_id: planId,
       p_actor_id: user.id,
@@ -792,8 +792,33 @@ export default function PlanDetail({ navigate, planId }) {
             >
               <EmojiAvatar emoji={r.profiles?.emoji} size="sm" />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
-                  {r.profiles?.display_name}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                    {r.profiles?.display_name}
+                  </span>
+                  {showNudge && (
+                    <button
+                      onClick={() => cooldownOk && nudgeMember(r.user_id)}
+                      disabled={!cooldownOk || isCurrentlyNudging}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        background: 'none', border: 'none', padding: 0,
+                        cursor: cooldownOk ? 'pointer' : 'default',
+                        opacity: isCurrentlyNudging ? 0.6 : 1,
+                      }}
+                      aria-label={`Nudge ${r.profiles?.display_name}`}
+                    >
+                      <span style={{ fontSize: 12, lineHeight: 1 }}>👈</span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700,
+                        color: cooldownOk ? '#C2185B' : '#aaa',
+                        fontFamily: 'Inter, sans-serif',
+                        lineHeight: 1,
+                      }}>
+                        {isCurrentlyNudging ? 'Nudging…' : cooldownOk ? 'Nudge' : 'Nudged'}
+                      </span>
+                    </button>
+                  )}
                 </div>
                 {ago && (
                   <div style={{ fontSize: 10, color: '#aaa', marginTop: 1 }}>
@@ -805,30 +830,6 @@ export default function PlanDetail({ navigate, planId }) {
                 ? <Pill variant={RSVP_PILL[r.status]}>{RSVP_LABEL[r.status]}</Pill>
                 : <Pill variant="neutral">No reply</Pill>
               }
-              {showNudge && (
-                <button
-                  onClick={() => cooldownOk && nudgeMember(r.user_id)}
-                  disabled={!cooldownOk || isCurrentlyNudging}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 3,
-                    background: cooldownOk ? '#FFF0F8' : '#f5f5f5',
-                    border: 'none', borderRadius: 999,
-                    padding: '5px 10px',
-                    cursor: cooldownOk ? 'pointer' : 'default',
-                    opacity: isCurrentlyNudging ? 0.6 : 1,
-                  }}
-                  aria-label={`Nudge ${r.profiles?.display_name}`}
-                >
-                  <span style={{ fontSize: 12 }}>🫷</span>
-                  <span style={{
-                    fontSize: 10, fontWeight: 700,
-                    color: cooldownOk ? '#C2185B' : '#aaa',
-                    fontFamily: 'Inter, sans-serif',
-                  }}>
-                    {isCurrentlyNudging ? 'Nudging…' : cooldownOk ? 'Nudge' : 'Nudged'}
-                  </span>
-                </button>
-              )}
             </motion.div>
           )
         })}
@@ -1405,7 +1406,7 @@ export default function PlanDetail({ navigate, planId }) {
             key="post-action-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => setActionSheetPost(null)}
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end pb-[calc(68px+max(8px,env(safe-area-inset-bottom)))] md:pb-0"
           >
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
@@ -1455,7 +1456,7 @@ export default function PlanDetail({ navigate, planId }) {
             key="delete-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => !deleting && setDeleteOpen(false)}
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end pb-[calc(68px+max(8px,env(safe-area-inset-bottom)))] md:pb-0"
           >
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
@@ -1507,7 +1508,7 @@ export default function PlanDetail({ navigate, planId }) {
             key="edit-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => !saving && setEditOpen(false)}
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end"
+            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end pb-[calc(68px+max(8px,env(safe-area-inset-bottom)))] md:pb-0"
           >
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
