@@ -10,6 +10,7 @@ import Profile from './screens/Profile'
 import Summary from './screens/Summary'
 import Plans from './screens/Plans'
 import JoinPage from './screens/JoinPage'
+import Notifications from './screens/Notifications'
 
 function readInviteFromUrl() {
   try {
@@ -157,6 +158,7 @@ export default function App() {
       case 'plans':       return <Plans {...props} />
       case 'profile':     return <Profile {...props} />
       case 'summary':     return <Summary {...props} />
+      case 'notifications': return <Notifications {...props} />
       default:            return <Home {...props} />
     }
   })()

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -6,6 +6,17 @@ import { NavBar, TopBar, EmojiAvatar, Pill, SectionHeader } from '../components/
 
 const TIER_PILL = { 1: 'tier1', 2: 'tier2', 3: 'tier3' }
 const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' }
+
+// Urgency score: pending RSVPs float to top, then tier (lower = more important),
+// then sooner date wins.
+function getPriorityScore(plan) {
+  let score = 0
+  if (!plan.my_rsvp) score += 1000
+  score += (4 - (plan.tier || 3)) * 100
+  const days = (new Date(plan.date).getTime() - Date.now()) / 86400000
+  score -= days
+  return score
+}
 
 function PlanCard({ plan, onPress, index }) {
   const isPending = !plan.my_rsvp
@@ -59,6 +70,21 @@ export default function Home({ navigate }) {
   const [activity, setActivity] = useState([])
   const [group, setGroup] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [sortMode, setSortMode] = useState('urgency')
+  const [showSortSheet, setShowSortSheet] = useState(false)
+
+  const displayPlans = useMemo(() => {
+    const copy = [...plans]
+    if (sortMode === 'time') {
+      return copy.sort((a, b) => new Date(a.date) - new Date(b.date))
+    }
+    if (sortMode === 'tier') {
+      return copy.sort((a, b) =>
+        a.tier !== b.tier ? a.tier - b.tier : new Date(a.date) - new Date(b.date)
+      )
+    }
+    return copy.sort((a, b) => getPriorityScore(b) - getPriorityScore(a))
+  }, [plans, sortMode])
 
   useEffect(() => { loadData() }, [])
 
@@ -112,7 +138,6 @@ export default function Home({ navigate }) {
       .eq('status', 'open')
       .gte('date', new Date().toISOString().split('T')[0])
       .order('date', { ascending: true })
-      .limit(5)
 
     if (upcomingData) {
       const enriched = upcomingData.map(p => {
@@ -230,16 +255,42 @@ export default function Home({ navigate }) {
           </div>
         ) : (
           <>
-            <SectionHeader>Coming up</SectionHeader>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '0 20px', marginBottom: 10, position: 'relative', zIndex: 1,
+            }}>
+              <span style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: '0.09em',
+                textTransform: 'uppercase', color: '#bbb',
+              }}>
+                Coming up
+              </span>
 
-            {plans.length === 0 ? (
+              <div
+                onClick={() => setShowSortSheet(true)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                  cursor: 'pointer', padding: '3px 0',
+                }}
+              >
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: '0.09em',
+                  textTransform: 'uppercase', color: '#bbb',
+                }}>
+                  Sort by: {sortMode === 'time' ? 'date' : sortMode === 'tier' ? 'tier' : 'urgency'}
+                </span>
+                <i className="ti ti-chevron-down" style={{ fontSize: 9, color: '#bbb' }} />
+              </div>
+            </div>
+
+            {displayPlans.length === 0 ? (
               <div className="glass-card mx-5 mb-3 p-5 text-center">
                 <div className="text-3xl mb-2">🎉</div>
                 <p className="text-[13px] font-bold text-ink mb-1">No plans yet</p>
                 <p className="text-[12px] text-[#aaa]">Use the + button in the nav bar to plan something.</p>
               </div>
             ) : (
-              plans.map((plan, i) => (
+              displayPlans.map((plan, i) => (
                 <PlanCard key={plan.id} plan={plan} onPress={() => navigate('plan-detail', { planId: plan.id })} index={i} />
               ))
             )}
@@ -273,6 +324,72 @@ export default function Home({ navigate }) {
       </div>
 
       <NavBar active="home" navigate={navigate} />
+
+      {showSortSheet && (
+        <div
+          onClick={() => setShowSortSheet(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              maxWidth: 680, margin: '0 auto',
+              background: '#FFFBF5', borderRadius: '24px 24px 0 0',
+              padding: '16px 20px 48px',
+            }}
+          >
+            <div style={{
+              width: 36, height: 4, borderRadius: 999,
+              background: 'rgba(0,0,0,0.1)', margin: '0 auto 16px',
+            }} />
+
+            <div style={{
+              fontFamily: '"Plus Jakarta Sans", sans-serif',
+              fontSize: 16, fontWeight: 800, color: '#111', marginBottom: 12,
+            }}>
+              Sort plans
+            </div>
+
+            {[
+              { key: 'urgency', label: 'Urgency', sub: 'Reply needed first, then tier + time', emoji: '⚡' },
+              { key: 'time',    label: 'Date',    sub: 'Soonest plans first',                  emoji: '🗓️' },
+              { key: 'tier',    label: 'Tier',    sub: 'Most important plans first',           emoji: '🏆' },
+            ].map(opt => (
+              <div
+                key={opt.key}
+                onClick={() => { setSortMode(opt.key); setShowSortSheet(false) }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '13px 14px', borderRadius: 14, marginBottom: 6,
+                  cursor: 'pointer',
+                  background: sortMode === opt.key
+                    ? 'rgba(251,146,60,0.08)'
+                    : 'rgba(255,255,255,0.8)',
+                  border: sortMode === opt.key
+                    ? '1.5px solid rgba(251,146,60,0.3)'
+                    : '1px solid rgba(0,0,0,0.06)',
+                }}
+              >
+                <div style={{ fontSize: 20, flexShrink: 0 }}>{opt.emoji}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                    fontSize: 14, fontWeight: 700, color: '#111', marginBottom: 2,
+                  }}>{opt.label}</div>
+                  <div style={{ fontSize: 11, color: '#aaa' }}>{opt.sub}</div>
+                </div>
+                {sortMode === opt.key && (
+                  <i className="ti ti-check" style={{ fontSize: 16, color: '#FB923C' }} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

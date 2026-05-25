@@ -1,9 +1,38 @@
 // Shared low-level components used across all screens
 
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 
 export function TopBar({ navigate }) {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
+  const [unread, setUnread] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    ;(async () => {
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('read', false)
+      if (!cancelled) setUnread(count || 0)
+    })()
+
+    const channel = supabase
+      .channel('notif-count-' + user.id)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`,
+      }, () => setUnread(n => n + 1))
+      .subscribe()
+
+    return () => { cancelled = true; supabase.removeChannel(channel) }
+  }, [user])
+
   return (
     <div
       className="sticky top-0 z-50 flex items-center justify-between px-5 border-b border-black/[0.06]"
@@ -25,8 +54,25 @@ export function TopBar({ navigate }) {
         Goodfriends.
       </div>
       <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-full bg-black/[0.05] flex items-center justify-center">
+        <div
+          onClick={() => navigate?.('notifications')}
+          className="relative w-7 h-7 rounded-full bg-black/[0.05] flex items-center justify-center cursor-pointer"
+        >
           <i className="ti ti-bell text-ink" style={{ fontSize: '13px' }} />
+          {unread > 0 && (
+            <div
+              style={{
+                position: 'absolute', top: -2, right: -2,
+                minWidth: 14, height: 14, padding: '0 3px', borderRadius: 999,
+                background: '#FB923C', border: '2px solid #FFFBF5',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <span style={{ fontSize: 8, fontWeight: 700, color: '#fff', lineHeight: 1 }}>
+                {unread > 9 ? '9+' : unread}
+              </span>
+            </div>
+          )}
         </div>
         <div
           onClick={() => navigate?.('profile')}

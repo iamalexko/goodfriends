@@ -80,6 +80,20 @@ export default function CreatePlan({ navigate }) {
       return
     }
 
+    const invitedUserIds = Object.entries(invited)
+      .filter(([id, on]) => on && id !== user.id)
+      .map(([id]) => id)
+    for (const userId of invitedUserIds) {
+      await supabase.rpc('create_notification', {
+        p_user_id: userId,
+        p_type: 'event_invite',
+        p_title: "You're invited 🎉",
+        p_body: `${profile.display_name} invited you to ${form.name}`,
+        p_plan_id: plan.id,
+        p_actor_id: user.id,
+      })
+    }
+
     setLoading(false)
     navigate('home')
   }

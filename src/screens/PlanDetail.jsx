@@ -214,15 +214,31 @@ export default function PlanDetail({ navigate, planId }) {
       imageUrl = publicUrl
     }
 
+    const isPhoto = !!composerPhoto
     const { error: insErr } = await supabase.from('posts').insert({
       plan_id: planId,
       user_id: user.id,
-      type: composerPhoto ? 'photo' : 'comment',
+      type: isPhoto ? 'photo' : 'comment',
       image_url: imageUrl,
-      caption: composerPhoto && text ? text : null,
-      content: !composerPhoto && text ? text : null,
+      caption: isPhoto && text ? text : null,
+      content: !isPhoto && text ? text : null,
     })
     if (insErr) console.error('PlanDetail: insert post failed', insErr)
+    else {
+      const uniqueUsers = [...new Set(rsvps.map(r => r.user_id))].filter(id => id !== user.id)
+      for (const userId of uniqueUsers) {
+        await supabase.rpc('create_notification', {
+          p_user_id: userId,
+          p_type: isPhoto ? 'photo_posted' : 'event_comment',
+          p_title: isPhoto ? 'New photo 📸' : 'New comment',
+          p_body: isPhoto
+            ? `${profile?.display_name || 'Someone'} added a photo to ${plan.name}`
+            : `${profile?.display_name || 'Someone'}: ${text.slice(0, 60)}${text.length > 60 ? '…' : ''}`,
+          p_plan_id: planId,
+          p_actor_id: user.id,
+        })
+      }
+    }
 
     // Reset composer
     if (composerPhoto?.previewUrl) URL.revokeObjectURL(composerPhoto.previewUrl)
@@ -263,6 +279,16 @@ export default function PlanDetail({ navigate, planId }) {
       post_id: postId, user_id: user.id, emoji,
     })
     if (insErr) console.error('toggleReaction insert', insErr)
+    else if (post?.user_id) {
+      await supabase.rpc('create_notification', {
+        p_user_id: post.user_id,
+        p_type: 'reaction_received',
+        p_title: 'Someone reacted',
+        p_body: `${profile?.display_name || 'Someone'} reacted ${emoji} to your post in ${plan?.name || 'a plan'}`,
+        p_plan_id: planId,
+        p_actor_id: user.id,
+      })
+    }
     setReactionPickerPostId(null)
     loadPosts()
   }
@@ -365,6 +391,37 @@ export default function PlanDetail({ navigate, planId }) {
       console.error('PlanDetail: failed to save RSVP', error)
       setMyRsvp(previousMy)
       setRsvps(previousRsvps)
+      return
+    }
+
+    // Notify organiser
+    const statusBody = status === 'in' ? 'in' : status === 'likely' ? 'likely in' : 'out'
+    await supabase.rpc('create_notification', {
+      p_user_id: plan.organiser_id,
+      p_type: 'event_rsvp',
+      p_title: 'New RSVP',
+      p_body: `${profile?.display_name || 'Someone'} is ${statusBody} for ${plan.name}`,
+      p_plan_id: planId,
+      p_actor_id: user.id,
+    })
+
+    // If 5+ confirmed after this change, nudge anyone who still hasn't replied
+    const nextRsvps = previousRsvps.map(r => r.user_id === user.id ? { ...r, status } : r)
+    const hasMe = nextRsvps.some(r => r.user_id === user.id)
+    const fullList = hasMe ? nextRsvps : [...nextRsvps, { user_id: user.id, status }]
+    const confirmedCount = fullList.filter(r => r.status === 'in').length
+    if (confirmedCount >= 5) {
+      const noReply = fullList.filter(r => !r.status && r.user_id !== user.id)
+      for (const r of noReply) {
+        await supabase.rpc('create_notification', {
+          p_user_id: r.user_id,
+          p_type: 'event_filling',
+          p_title: 'Event filling up 👀',
+          p_body: `${confirmedCount} people are in for ${plan.name} — still need your reply`,
+          p_plan_id: planId,
+          p_actor_id: user.id,
+        })
+      }
     }
   }
 
@@ -496,6 +553,18 @@ export default function PlanDetail({ navigate, planId }) {
     await Promise.all(everyone.map(userId =>
       supabase.rpc('recalculate_member_score', { p_user_id: userId, p_group_id: plan.group_id })
     ))
+
+    const { data: { user: closeUser } } = await supabase.auth.getUser()
+    for (const rsvp of rsvps) {
+      await supabase.rpc('create_notification', {
+        p_user_id: rsvp.user_id,
+        p_type: 'event_closed',
+        p_title: 'Event closed ✓',
+        p_body: `${plan.name} has been closed — scores updated`,
+        p_plan_id: planId,
+        p_actor_id: closeUser?.id,
+      })
+    }
 
     setClosing(false)
     navigate('home')
