@@ -53,9 +53,10 @@ src/
     Notifications.jsx     ← bell-icon list view
     JoinPage.jsx          ← public /join/:code redemption
 supabase/
-  functions/send-reminders/index.ts   ← daily reminders + no-reply nudges
-  config.toml                          ← project id + cron schedule
-supabase-schema.sql                    ← committed schema for reference (run once on setup)
+  functions/send-reminders/index.ts   ← daily reminders + no-reply nudges (cron, no auth)
+  functions/generate-summary/index.ts ← AI monthly recap via Gemini 2.5 Flash (user-invoked, JWT auth)
+  config.toml                         ← project id + cron schedule
+supabase-schema.sql                   ← committed schema for reference (run once on setup)
 ```
 
 ---
@@ -105,6 +106,7 @@ To add a screen: create the file, add an import + case in `App.jsx`, navigate fr
 | `posts` | moments feed entries (type: `photo` \| `comment`) |
 | `reactions` | emoji reactions on posts |
 | `notifications` | in-app notification feed |
+| `summaries` | cached AI monthly recap, keyed `(group_id, year_month UNIQUE)`. Stores `headline`, `subtitle`, `moments jsonb`, `model` |
 
 ### Notification system (already wired)
 
@@ -116,6 +118,17 @@ To add a screen: create the file, add an import + case in `App.jsx`, navigate fr
   - `CreatePlan.jsx` → invite
   - `PlanDetail.jsx`: setRsvpStatus → rsvp + filling, deletePlan → cancelled, closeEvent → closed, submitPost → comment/photo, toggleReaction → reaction
   - `send-reminders` edge fn → reminder + no-reply (daily 5 UTC via pg_cron)
+
+### Monthly summary system (already wired)
+
+- `summaries` table with read-only RLS (only group members can see their crew's recaps)
+- `generate-summary` edge function: pulls a month of plans/rsvps/attendances/posts for a crew, sends to **Gemini 2.5 Flash** with a `responseSchema` and stores the JSON in `summaries` keyed by `(group_id, year_month)`
+- `verify_jwt: true` — caller must be authenticated *and* a member of the group
+- Cache hit on subsequent calls is ~500ms; force regeneration via `{ force: true }` body field
+- CORS handled for browser callers (preflight + headers on all responses)
+- Thinking is **explicitly disabled** (`thinkingConfig.thinkingBudget: 0`) — Gemini 2.5 Flash thinks by default and the thinking tokens would eat the `maxOutputTokens` budget before the structured JSON finishes
+- Requires `GEMINI_API_KEY` set as a Supabase Functions secret. Get a free key at https://aistudio.google.com/app/apikey
+- Surfaced in `Summary.jsx` — replaces the previously hardcoded "Most fun / embarrassing / heartfelt" blurbs
 
 ### RPCs that exist (besides `create_notification`)
 
@@ -164,8 +177,14 @@ Defined in `src/index.css` and Tailwind config:
 
 - **Frontend**: Vercel auto-deploys from `main`. Project `prj_C7p5KLh6ijiN8x7ZmqseYmTMXeDF` under team `team_B1Eg7ndc0OyJsy9RfTyPlB2z` ("Alex's projects"). Env vars set in Vercel dashboard.
 - **DB migrations**: applied via Supabase MCP or dashboard SQL editor. No tracked migrations folder — `supabase-schema.sql` is the source of truth for initial schema; subsequent changes have been applied directly to prod.
-- **Edge function**: `send-reminders` deployed (currently `verify_jwt: false` so pg_cron can hit it without auth). Re-deploy via `supabase functions deploy send-reminders` (CLI) or via MCP.
-- **Cron**: `pg_cron` job `send-reminders-daily` runs `0 5 * * *` UTC (9am Dubai). Calls the edge function via `net.http_post`. Manage with `cron.alter_job` / `cron.unschedule` / `cron.job_run_details`.
+- **Edge functions** (deployed):
+  - `send-reminders` — `verify_jwt: false` so pg_cron can hit it without auth. Daily reminders + no-reply nudges.
+  - `generate-summary` — `verify_jwt: true`. Caller's JWT is verified and group membership is checked before reading anything.
+  - Re-deploy either via `supabase functions deploy <name>` (CLI) or via MCP. Pass `--no-verify-jwt` explicitly when redeploying `send-reminders` from the CLI, or the cron will start 401'ing.
+- **Edge-function secrets**: set via `supabase secrets set --project-ref ligemjbtjpqmrrwyiiyu KEY=value` or the dashboard. Currently required:
+  - `GEMINI_API_KEY` — for `generate-summary` (Google AI Studio, free tier)
+  - (Supabase auto-provides `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` to every function.)
+- **Cron**: `pg_cron` job `send-reminders-daily` runs `0 5 * * *` UTC (9am Dubai). Calls the `send-reminders` edge function via `net.http_post`. Manage with `cron.alter_job` / `cron.unschedule` / `cron.job_run_details`. (`generate-summary` is user-triggered only; no cron yet.)
 
 ---
 
@@ -183,12 +202,12 @@ Defined in `src/index.css` and Tailwind config:
 - Notifications: in-app feed + live bell badge + 10 trigger types + daily cron
 - Profile with score history and emoji change
 - Home: unlimited upcoming events, inline sort control (urgency/date/tier)
+- Monthly AI recap on the Summary screen (Gemini 2.5 Flash, structured output, cached per `group_id × year_month`, Generate/Regenerate CTA)
 
 ## On the README's "Next things to build" list
 
 - [ ] Group invite share UX (link generation + share sheet beyond raw `/join/:code`)
 - [ ] Push notifications (web push or Twilio/Expo bridge — WhatsApp layered on top)
-- [ ] Monthly summary AI generation (Claude API call from edge function)
 - [ ] Grace pass mechanic (one missed event doesn't break streak)
 
 ---
@@ -199,10 +218,11 @@ Defined in `src/index.css` and Tailwind config:
 2. **`currentUser` vs `user`** — most handlers re-fetch via `supabase.auth.getUser()` to avoid stale closure. Match existing style in each file.
 3. **`notifications.plan_id` is `ON DELETE CASCADE`** — if writing a notification about a row that's about to be deleted (like `event_cancelled`), set `p_plan_id: null` and put the plan name in the body. Otherwise the cascade nukes it.
 4. **RSVP statuses are `in` / `likely` / `no`** — the `no` value used to be `maybe`; do not regress.
-5. **Edge function has `verify_jwt: false`** — re-deploying via Supabase CLI without explicit handling will flip this back to true and break the cron. Stay explicit.
-6. **Realtime subscription cleanup** — every `supabase.channel(...).subscribe()` needs a matching `removeChannel` in the effect return. The channel name should include the user/plan id to avoid cross-tab collisions.
-7. **`launch.json`** has a hardcoded `/Users/alex/.nvm/...` path — it's per-machine and ideally would be `.gitignore`d. Don't commit edits to it.
-8. **Supabase project ref**: `ligemjbtjpqmrrwyiiyu`. Dashboard: https://supabase.com/dashboard/project/ligemjbtjpqmrrwyiiyu
+5. **Edge function has `verify_jwt: false`** — re-deploying `send-reminders` via Supabase CLI without `--no-verify-jwt` will flip this back to true and break the cron. Stay explicit. `generate-summary` is the opposite — leave its `verify_jwt: true`.
+6. **Gemini 2.5 Flash thinks by default** — when calling Gemini with `responseSchema`, set `generationConfig.thinkingConfig.thinkingBudget: 0` (or bump `maxOutputTokens` to ~4000+). Otherwise the model burns the output budget on reasoning tokens and returns a truncated JSON that fails to parse.
+7. **Realtime subscription cleanup** — every `supabase.channel(...).subscribe()` needs a matching `removeChannel` in the effect return. The channel name should include the user/plan id to avoid cross-tab collisions.
+8. **`launch.json`** has a hardcoded `/Users/alex/.nvm/...` path — it's per-machine and ideally would be `.gitignore`d. Don't commit edits to it.
+9. **Supabase project ref**: `ligemjbtjpqmrrwyiiyu`. Dashboard: https://supabase.com/dashboard/project/ligemjbtjpqmrrwyiiyu
 
 ---
 
