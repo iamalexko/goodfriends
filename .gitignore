@@ -1,9 +1,33 @@
+# Dependencies
 node_modules
+**/node_modules
+
+# Build output
 dist
+apps/web/dist
+apps/mobile/.expo
+apps/mobile/.expo-shared
+apps/mobile/dist
+apps/mobile/ios
+apps/mobile/android
+apps/mobile/web-build
+
+# Env
 .env
 .env.local
 .env.production
+apps/web/.env
+apps/mobile/.env
+
+# Vercel
 .vercel
+apps/web/.vercel
+
+# OS / editor
 .DS_Store
 *.log
 .claude/settings.local.json
+
+# Expo
+apps/mobile/.expo
+apps/mobile/.metro-cache
