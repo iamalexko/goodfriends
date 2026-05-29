@@ -21,11 +21,13 @@ import {
 import { AuthProvider } from '../context/AuthContext'
 
 // Keep the splash up until fonts resolve so the wordmark doesn't flash in
-// the system fallback face on first paint.
-SplashScreen.preventAutoHideAsync()
+// the system fallback face on first paint. If the font fetch errors out
+// (e.g. flaky network), fall through to the app anyway — system fonts on
+// the placeholder screens are an acceptable degradation.
+SplashScreen.preventAutoHideAsync().catch(() => {})
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
     PlusJakartaSans_900Black,
@@ -36,10 +38,11 @@ export default function RootLayout() {
   })
 
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync()
-  }, [fontsLoaded])
+    if (fontError) console.warn('useFonts error', fontError)
+    if (fontsLoaded || fontError) SplashScreen.hideAsync().catch(() => {})
+  }, [fontsLoaded, fontError])
 
-  if (!fontsLoaded) return null
+  if (!fontsLoaded && !fontError) return null
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

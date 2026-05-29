@@ -3,9 +3,13 @@ import { ActivityIndicator, View } from 'react-native'
 
 import { useAuth } from '../context/AuthContext'
 
-// Boot router: park on an inline spinner until AuthContext resolves, then
-// jump to onboarding if there's no session OR no display_name yet, otherwise
-// land on the home tab.
+// SCAFFOLD MODE — auth/onboarding flow not yet ported to mobile, so we
+// short-circuit straight to the (tabs) layout while there's no session.
+// Restore the original gate (commented below) once Auth.tsx ships for mobile.
+//
+// Original gate:
+//   if (!user || !profile?.display_name) return <Redirect href="/onboarding" />
+//   return <Redirect href="/(tabs)/home" />
 export default function Index() {
   const { user, profile, loading } = useAuth()
 
@@ -17,9 +21,10 @@ export default function Index() {
     )
   }
 
-  if (!user || !profile?.display_name) {
-    return <Redirect href="/onboarding" />
+  // Signed-in users with a profile still land on home; everyone else also
+  // lands on home until the real onboarding flow ships.
+  if (user && profile?.display_name) {
+    return <Redirect href="/(tabs)/home" />
   }
-
   return <Redirect href="/(tabs)/home" />
 }

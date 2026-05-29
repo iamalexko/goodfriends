@@ -9,5 +9,13 @@
     "web": "npm run dev -w @goodfriends/web",
     "web:build": "npm run build -w @goodfriends/web",
     "mobile": "cd apps/mobile && npx expo start"
+  },
+  "dependencies": {
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "semver": "^7.6.0"
+  },
+  "overrides": {
+    "semver": "^7.6.0"
   }
 }
