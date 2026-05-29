@@ -49,9 +49,17 @@ export function PlanCard({ plan, onPress }: { plan: Plan; onPress?: () => void }
         marginBottom: 10,
         padding: 14,
         borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.7)',
+        // Bumped from 0.7 → 0.92 so the card reads against the cream body even
+        // without backdrop-filter (RN has no equivalent). Add a real iOS shadow
+        // + Android elevation so the card feels lifted, not flat.
+        backgroundColor: 'rgba(255,255,255,0.92)',
         borderWidth: isPending ? 1.5 : 1,
         borderColor: isPending ? '#FB923C' : 'rgba(0,0,0,0.06)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+        elevation: 2,
         transform: [{ scale: pressed ? 0.99 : 1 }],
       })}
     >
