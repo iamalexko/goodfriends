@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Goodfriends",
+    "slug": "goodfriends",
+    "version": "1.0.0",
+    "scheme": "goodfriends",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.goodfriends.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Goodfriends uses your camera to add photos to plan moments.",
+        "NSPhotoLibraryUsageDescription": "Goodfriends accesses your photos to share moments with your crew."
+      }
+    },
+    "android": {
+      "package": "com.goodfriends.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFBF5",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#FB923C"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
