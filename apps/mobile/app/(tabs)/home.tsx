@@ -272,10 +272,15 @@ export default function Home() {
                 marginBottom: 12,
                 padding: 20,
                 borderRadius: 20,
-                backgroundColor: 'rgba(255,255,255,0.7)',
+                backgroundColor: '#FFFFFF',
                 borderWidth: 1,
                 borderColor: 'rgba(0,0,0,0.06)',
                 alignItems: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.08,
+                shadowRadius: 8,
+                elevation: 3,
               }}
             >
               <Text style={{ fontSize: 28, marginBottom: 8 }}>🎉</Text>
