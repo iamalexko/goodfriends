@@ -5,17 +5,21 @@ import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import * as SplashScreen from 'expo-splash-screen'
+// Plus Jakarta Sans tops out at 800 ExtraBold in @expo-google-fonts — no
+// 900 Black variant exists. Importing PlusJakartaSans_900Black makes the
+// whole useFonts call fail silently (undefined asset), which is why
+// nothing PJS rendered until we dropped it.
 import {
   useFonts,
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
-  PlusJakartaSans_900Black,
 } from '@expo-google-fonts/plus-jakarta-sans'
 import {
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
+  Inter_900Black,
 } from '@expo-google-fonts/inter'
 
 import { AuthProvider } from '../context/AuthContext'
@@ -30,11 +34,11 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
-    PlusJakartaSans_900Black,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    Inter_900Black,
   })
 
   useEffect(() => {

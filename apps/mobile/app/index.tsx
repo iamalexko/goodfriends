@@ -1,30 +1,22 @@
 import { Redirect } from 'expo-router'
-import { ActivityIndicator, View } from 'react-native'
 
+import { Loader } from '../components/Loader'
 import { useAuth } from '../context/AuthContext'
 
-// SCAFFOLD MODE — auth/onboarding flow not yet ported to mobile, so we
-// short-circuit straight to the (tabs) layout while there's no session.
-// Restore the original gate (commented below) once Auth.tsx ships for mobile.
-//
-// Original gate:
-//   if (!user || !profile?.display_name) return <Redirect href="/onboarding" />
-//   return <Redirect href="/(tabs)/home" />
+// Boot router: park on the branded loader until AuthContext resolves, then
+// jump to /auth if there's no session OR no profile.display_name yet,
+// otherwise land on the home tab. Sign-up captures display_name + emoji
+// inline, so there's no separate /onboarding step — /auth handles both.
 export default function Index() {
   const { user, profile, loading } = useAuth()
 
   if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFBF5' }}>
-        <ActivityIndicator color="#FB923C" />
-      </View>
-    )
+    return <Loader fullScreen size="lg" />
   }
 
-  // Signed-in users with a profile still land on home; everyone else also
-  // lands on home until the real onboarding flow ships.
-  if (user && profile?.display_name) {
-    return <Redirect href="/(tabs)/home" />
+  if (!user || !profile?.display_name) {
+    return <Redirect href={'/auth' as any} />
   }
-  return <Redirect href="/(tabs)/home" />
+
+  return <Redirect href={'/(tabs)/home' as any} />
 }

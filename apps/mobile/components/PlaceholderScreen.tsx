@@ -12,7 +12,7 @@ export function PlaceholderScreen({ title }: { title: string }) {
       justifyContent: 'center',
     }}>
       <Text style={{
-        fontFamily: 'PlusJakartaSans_900Black',
+        fontFamily: 'PlusJakartaSans_800ExtraBold',
         fontSize: 28,
         color: '#111',
         letterSpacing: -0.5,
