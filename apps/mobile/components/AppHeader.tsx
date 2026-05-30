@@ -12,8 +12,6 @@ import Animated, {
 } from 'react-native-reanimated'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { BlurView } from 'expo-blur'
-import { LinearGradient } from 'expo-linear-gradient'
-import MaskedView from '@react-native-masked-view/masked-view'
 
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -25,16 +23,10 @@ import { useAuth } from '../context/AuthContext'
 // background is invisible — the buttons sit on warm paper. By scrollY 40
 // the glass background has faded fully in.
 //
-// The key trick is that the glass doesn't end at a hard edge. A
-// MaskedView + vertical LinearGradient feathers the bottom 24px of the
-// background to transparent, so the material dissolves into the feed
-// instead of cutting off at a hairline border (which is what makes a
-// regular BlurView read as "blur panel" instead of "iOS glass").
-//
-// On iOS 26 (where `isLiquidGlassAvailable()` returns true), the
-// material is `GlassView` so we get UIKit's progressive lens. On
-// earlier iOS / Android, we fall back to a masked BlurView — same
-// feather, just a uniform blur radius instead of progressive.
+// The background is a REAL iOS 26 GlassView (live lens), feathered at the
+// bottom by a stack of stepped-opacity glass strips so it dissolves into the
+// feed with no hard cut-off line — never a mask or a paper gradient. See
+// GlassBlend below for the full rationale.
 const LIQUID = isLiquidGlassAvailable()
 
 export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
@@ -142,41 +134,65 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
   )
 }
 
-// The glass background. Sized to header height + FADE so the LinearGradient
-// mask can ramp from opaque (over the header rows) to fully transparent at
-// the bottom — the feather that kills the cut-off seam.
+// The glass background. Real iOS 26 Liquid Glass, feathered at the bottom.
+//
+// REQUIREMENT: the header background MUST be a real `GlassView` (live lens /
+// refraction), not a BlurView and not a tinted-paper approximation.
+//
+// The hard part is feathering its bottom edge. You CANNOT do it with a
+// `MaskedView`: the mask snapshots its subtree to an alpha bitmap, and the
+// glass material is a separate real-time backdrop pass that doesn't survive
+// the snapshot — so a masked GlassView renders only its flat tint, no blur
+// (the "I see no glass" bug). A warm-paper gradient laid OVER the glass also
+// isn't real glass — it just paints page color on top.
+//
+// So we feather with REAL glass: a stack of thin GlassView strips down the
+// fade zone, each a genuine unmasked lens, with stepped opacity from ~0.89
+// at the top of the fade to ~0.11 at the bottom. Ancestor/instance opacity
+// attenuates the live glass, so the lens dissolves progressively into the
+// feed — real glass all the way down, no mask, no paper.
+//
+// (iOS < 26 / Android: GlassView isn't available, so the solid region and
+// the strips use BlurView instead — same stepped-opacity feather.)
 function GlassBlend({ topInset }: { topInset: number }) {
   const HEADER_H = topInset + 52
-  const FADE = 24
+  const FADE = 32
+  const STRIPS = 8
+  const stripH = FADE / STRIPS
 
-  // iOS 26 `regular` glass alone reads too subtle against a warm-paper
-  // background — almost transparent. A nearly-opaque warm tint biases the
-  // material toward the page color so the glass reads as a clear soft frost
-  // panel (still refracts content beneath via the underlying GlassView
-  // lens). For the BlurView fallback, intensity 90 = Apple's "system thick".
-  const Material = LIQUID ? (
-    <GlassView
-      style={{ flex: 1 }}
-      glassEffectStyle="regular"
-      tintColor="rgba(255, 251, 245, 0.85)"
-    />
+  // Solid region — full-strength real glass behind the header rows.
+  const Solid = LIQUID ? (
+    <GlassView style={{ height: HEADER_H }} glassEffectStyle="regular" />
   ) : (
-    <BlurView intensity={90} tint="light" style={{ flex: 1 }} />
+    <BlurView intensity={90} tint="light" style={{ height: HEADER_H }} />
   )
 
   return (
-    <MaskedView
-      style={{ height: HEADER_H + FADE }}
-      maskElement={
-        <LinearGradient
-          colors={['#000', '#000', 'transparent']}
-          locations={[0, HEADER_H / (HEADER_H + FADE), 1]}
-          style={{ flex: 1 }}
-        />
-      }
-    >
-      {Material}
-    </MaskedView>
+    <View style={{ height: HEADER_H + FADE }}>
+      {Solid}
+
+      {/* Progressive feather: real-glass strips with stepped opacity. Strip i
+          sits just below the solid region; opacity ramps 1→0 going down so
+          the lens dissolves into the content with no hard cut-off line. */}
+      {Array.from({ length: STRIPS }).map((_, i) => {
+        const opacity = 1 - (i + 1) / (STRIPS + 1)
+        const top = HEADER_H + i * stripH
+        const stripStyle = {
+          position: 'absolute' as const,
+          left: 0,
+          right: 0,
+          top,
+          // +0.5 overlap so sub-pixel rounding can't leave gaps.
+          height: stripH + 0.5,
+          opacity,
+        }
+        return LIQUID ? (
+          <GlassView key={i} glassEffectStyle="regular" style={stripStyle} />
+        ) : (
+          <BlurView key={i} intensity={90} tint="light" style={stripStyle} />
+        )
+      })}
+    </View>
   )
 }
 
