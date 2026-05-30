@@ -18,7 +18,8 @@ export function CrewPill({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => ({
+      // Static style — function form drops props on iOS RN in this SDK.
+      style={{
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
@@ -29,9 +30,8 @@ export function CrewPill({
         paddingVertical: 5,
         paddingLeft: 6,
         paddingRight: 10,
-        opacity: pressed ? 0.85 : 1,
         flexShrink: 0,
-      })}
+      }}
     >
       {/* Overlapping emoji faces */}
       <View style={{ flexDirection: 'row' }}>
