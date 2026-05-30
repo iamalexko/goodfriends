@@ -240,9 +240,9 @@ export default function Home() {
         <ScrollView
           contentContainerStyle={{
             paddingTop: 4,
-            // Clears the floating LiquidGlassTabBar (~88px pill, 28px from
-            // bottom). Was `insets.bottom + 12` for the system tab bar.
-            paddingBottom: 120,
+            // NativeTabs handles bottom insets automatically for the first
+            // ScrollView in each tab screen. Small buffer below the last card.
+            paddingBottom: 24,
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />

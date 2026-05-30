@@ -5,17 +5,19 @@ import { Bell } from 'phosphor-react-native'
 import { useRouter } from 'expo-router'
 
 import { ICON_COLORS } from '../constants/icons'
+import { CreatePlanButton } from './CreatePlanButton'
 
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
-// Sticky top bar with the Goodfriends. wordmark on the left, an unread-
-// badged bell + the user's emoji avatar on the right. The avatar opens
-// the profile tab; the bell opens notifications.
+// Sticky top bar with the Goodfriends. wordmark on the left and the
+// right-side row [+ Plan pill] [unread-badged Bell] on the right.
+// The Profile tab is now reachable from the native NativeTabs bar at
+// the bottom, so we no longer duplicate it as a top-right avatar.
 export function TopBar() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { profile, user } = useAuth()
+  const { user } = useAuth()
   const [unread, setUnread] = useState(0)
 
   // Live unread badge: one count on mount + a realtime subscription that
@@ -92,6 +94,10 @@ export function TopBar() {
       </Text>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {/* "+ Plan" pill — opens the create modal. Lives in TopBar so it's
+            reachable from every tab (Home/Crew/Plans/Profile). */}
+        <CreatePlanButton />
+
         {/* Bell with optional unread badge */}
         <Pressable
           onPress={() => router.push('/notifications' as any)}
@@ -128,22 +134,6 @@ export function TopBar() {
               </Text>
             </View>
           )}
-        </Pressable>
-
-        {/* Profile emoji shortcut */}
-        <Pressable
-          onPress={() => router.push('/(tabs)/profile' as any)}
-          hitSlop={6}
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 14,
-            backgroundColor: '#F3F4F6',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text style={{ fontSize: 16 }}>{profile?.emoji || '😎'}</Text>
         </Pressable>
       </View>
     </View>
