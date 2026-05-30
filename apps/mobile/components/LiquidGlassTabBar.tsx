@@ -1,82 +1,53 @@
 import { useEffect } from 'react'
 import { View, Pressable, StyleSheet } from 'react-native'
 import { BlurView } from 'expo-blur'
-import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { useRouter, usePathname } from 'expo-router'
+import {
+  House,
+  Users,
+  Plus,
+  CalendarBlank,
+  User,
+  type IconProps,
+} from 'phosphor-react-native'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withSequence,
-  withTiming,
 } from 'react-native-reanimated'
+import type { ComponentType } from 'react'
 
-// iOS 26-style Liquid Glass tab bar with an animated lens that slides between
-// tabs with spring overshoot and a horizontal stretch during travel.
+import { ICON_COLORS, ICON_SIZES } from '../constants/icons'
 
-const ITEM_W = 52
-const FAB_W = 52
-const LENS_W = 48
-const PAD = 6
+// Full-width edge-to-edge glass nav (Option C).
+// - BlurView intensity 50 frosts whatever scrolls underneath.
+// - 5 equal flex slots: home, crew, FAB, plans, profile.
+// - FAB sits inline at icon height (not raised).
+// - No labels — icons only.
+// - Active icon swaps to Phosphor `fill` weight + ink, spring-scales to 1.1.
+// - Bottom inset respected so it clears the iOS home indicator.
 
 type Tab = {
   name: string
   route: string
-  icon?: keyof typeof Ionicons.glyphMap
-  outline?: keyof typeof Ionicons.glyphMap
+  Icon?: ComponentType<IconProps>
   isFab?: boolean
-  slot: number
 }
 
-// Tab layout: home, crew, [FAB], plans, profile.
-// The lens lives in the same row as the icons but skips the FAB slot — when
-// we're on /create the lens hides offscreen-left.
 const TABS: Tab[] = [
-  { name: 'home',    route: '/(tabs)/home',    icon: 'home',     outline: 'home-outline',     slot: 0 },
-  { name: 'crew',    route: '/(tabs)/crew',    icon: 'people',   outline: 'people-outline',   slot: 1 },
-  { name: 'create',  route: '/(tabs)/create',  isFab: true,                                   slot: 2 },
-  { name: 'plans',   route: '/(tabs)/plans',   icon: 'calendar', outline: 'calendar-outline', slot: 3 },
-  { name: 'profile', route: '/(tabs)/profile', icon: 'person',   outline: 'person-outline',   slot: 4 },
+  { name: 'home',    route: '/(tabs)/home',    Icon: House },
+  { name: 'crew',    route: '/(tabs)/crew',    Icon: Users },
+  { name: 'create',  route: '/(tabs)/create',  isFab: true },
+  { name: 'plans',   route: '/(tabs)/plans',   Icon: CalendarBlank },
+  { name: 'profile', route: '/(tabs)/profile', Icon: User },
 ]
-
-function lensX(slot: number) {
-  return PAD + slot * ITEM_W + (ITEM_W - LENS_W) / 2
-}
 
 export function LiquidGlassTabBar() {
   const router = useRouter()
   const pathname = usePathname()
-
-  const activeTab = TABS.find((t) => pathname?.includes(t.name)) ?? TABS[0]
-  const activeSlot = activeTab.slot
-
-  const x = useSharedValue(lensX(activeSlot))
-  const stretch = useSharedValue(1)
-  const lensOpacity = useSharedValue(activeTab.isFab ? 0 : 1)
-
-  useEffect(() => {
-    // Hide the lens entirely when the FAB slot is "active" (we're on /create)
-    if (activeTab.isFab) {
-      lensOpacity.value = withTiming(0, { duration: 120 })
-      return
-    }
-    lensOpacity.value = withTiming(1, { duration: 120 })
-
-    // Spring with overshoot — the lens snaps into the new slot
-    x.value = withSpring(lensX(activeSlot), { damping: 14, stiffness: 140, mass: 0.8 })
-    // Quick horizontal stretch then spring back to 1 — gives the lens that
-    // "elongating-glass" feel mid-travel
-    stretch.value = withSequence(
-      withTiming(1.35, { duration: 160 }),
-      withSpring(1, { damping: 12, stiffness: 180 }),
-    )
-  }, [activeSlot, activeTab.isFab])
-
-  const lensStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: x.value }, { scaleX: stretch.value }],
-    opacity: lensOpacity.value,
-  }))
+  const insets = useSafeAreaInsets()
 
   function go(route: string, isFab?: boolean) {
     Haptics.impactAsync(
@@ -86,150 +57,102 @@ export function LiquidGlassTabBar() {
   }
 
   return (
-    <View style={styles.wrap} pointerEvents="box-none">
-      <BlurView intensity={60} tint="light" style={styles.pill}>
-        <View style={styles.innerHighlight} pointerEvents="none" />
+    <BlurView
+      intensity={50}
+      tint="light"
+      style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 16) }]}
+    >
+      <View style={styles.innerHighlight} pointerEvents="none" />
 
-        {/* Animated sliding lens — behind the icons */}
-        <Animated.View style={[styles.lens, lensStyle]} pointerEvents="none">
-          <View style={styles.lensHighlight} />
-        </Animated.View>
+      {TABS.map((tab) => {
+        const isActive = pathname?.includes(tab.name) ?? false
 
-        {TABS.map((tab) => {
-          const isActive = pathname?.includes(tab.name) ?? false
-
-          if (tab.isFab) {
-            return (
-              <Pressable
-                key={tab.name}
-                onPress={() => go(tab.route, true)}
-                style={styles.fabSlot}
-              >
-                <View style={styles.fab}>
-                  <Ionicons name="add" size={22} color="#fff" />
-                </View>
-              </Pressable>
-            )
-          }
-
+        if (tab.isFab) {
           return (
-            <Pressable key={tab.name} onPress={() => go(tab.route)} style={styles.item}>
-              <AnimatedIcon active={isActive} icon={tab.icon!} outline={tab.outline!} />
+            <Pressable
+              key={tab.name}
+              onPress={() => go(tab.route, true)}
+              style={styles.slot}
+            >
+              <View style={styles.fab}>
+                <Plus size={22} weight="bold" color={ICON_COLORS.inverted} />
+              </View>
             </Pressable>
           )
-        })}
-      </BlurView>
-    </View>
+        }
+
+        return (
+          <Pressable key={tab.name} onPress={() => go(tab.route)} style={styles.slot}>
+            <TabIcon active={isActive} Icon={tab.Icon!} />
+          </Pressable>
+        )
+      })}
+    </BlurView>
   )
 }
 
-// Spring-scales up slightly when active so the icon "lifts" as the lens arrives.
-function AnimatedIcon({
+function TabIcon({
   active,
-  icon,
-  outline,
+  Icon,
 }: {
   active: boolean
-  icon: keyof typeof Ionicons.glyphMap
-  outline: keyof typeof Ionicons.glyphMap
+  Icon: ComponentType<IconProps>
 }) {
-  const scale = useSharedValue(active ? 1.12 : 1)
+  const scale = useSharedValue(active ? 1.1 : 1)
   useEffect(() => {
-    scale.value = withSpring(active ? 1.12 : 1, { damping: 12, stiffness: 180 })
+    scale.value = withSpring(active ? 1.1 : 1, { damping: 12, stiffness: 180 })
   }, [active])
-
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
 
   return (
     <Animated.View style={style}>
-      <Ionicons
-        name={(active ? icon : outline) as keyof typeof Ionicons.glyphMap}
-        size={22}
-        color={active ? '#111' : '#666'}
+      <Icon
+        size={ICON_SIZES.tab}
+        weight={active ? 'fill' : 'regular'}
+        color={active ? ICON_COLORS.active : ICON_COLORS.inactive}
       />
     </Animated.View>
   )
 }
 
 const styles = StyleSheet.create({
-  wrap: {
+  bar: {
     position: 'absolute',
-    bottom: 28,
+    bottom: 0,
     left: 0,
     right: 0,
-    alignItems: 'center',
-  },
-  pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: PAD,
-    paddingVertical: PAD,
-    borderRadius: 34,
+    paddingTop: 14,
+    paddingHorizontal: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.4)',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 12,
   },
   innerHighlight: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: '50%',
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  lens: {
-    position: 'absolute',
-    top: PAD,
-    left: 0,
-    width: LENS_W,
-    height: 42,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  lensHighlight: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '55%',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    height: 1,
     backgroundColor: 'rgba(255,255,255,0.6)',
   },
-  item: {
-    width: ITEM_W,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fabSlot: {
-    width: FAB_W,
-    height: 42,
+  slot: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   fab: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(17,17,17,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
     elevation: 8,
   },
 })

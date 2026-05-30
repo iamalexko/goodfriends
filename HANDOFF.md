@@ -322,6 +322,76 @@ Three options, in order of fidelity:
    - `npx expo start --lan` then `xcrun simctl getenv booted SIMULATOR_HOST_HOME` for the LAN URL, or generate a QR (`npx qrcode-terminal "exp://<lan-ip>:8081"`).
    - User needs same WiFi as the Mac + Local Network permission granted to Expo Go (older sessions) or to the dev-built `Goodfriends` app.
 
+### Icons — Phosphor
+
+**Library**: `phosphor-react-native` (peer dep `react-native-svg`). Standardised here, **no Ionicons** anywhere in mobile.
+
+**Weights**:
+- inactive → `regular`
+- active → `fill`
+- emphasis → `bold`
+- on dark backgrounds → `bold` white
+
+**Colours** (`apps/mobile/constants/icons.ts` `ICON_COLORS`):
+- active `#111111`
+- inactive `#666666`
+- muted `#AAAAAA`
+- accent `#FB923C`
+- inverted `#FFFFFF`
+
+**Sizes** (`ICON_SIZES`): tab `24` · inline `16` · header `18` · empty-state `32`
+
+**Rule**: one weight per context. Never mix `regular` and `fill` in the same row.
+
+**Mapping** for common app icons:
+
+| Usage | Phosphor |
+|---|---|
+| Home | `House` |
+| Crew | `Users` |
+| Plus / FAB | `Plus` |
+| Plans | `CalendarBlank` |
+| Profile | `User` |
+| Bell | `Bell` |
+| Back | `CaretLeft` |
+| Chevron right | `CaretRight` |
+| Chevron down | `CaretDown` |
+| Close | `X` |
+| Check | `Check` |
+| Camera | `Camera` |
+| Edit | `PencilSimple` |
+| Sort | `ArrowsDownUp` |
+| Sparkle | `Sparkle` |
+| Maximize | `ArrowsOutSimple` |
+| Reaction | `Smiley` |
+| Trending up | `TrendUp` |
+| Alert | `WarningCircle` |
+| Message | `ChatCircle` |
+| Nudge | `HandWaving` |
+| Invite | `UserPlus` |
+| Send | `ArrowUp` |
+| Clock | `Clock` |
+| Photo | `Image` |
+
+Usage:
+```tsx
+import { House } from 'phosphor-react-native'
+<House size={24} color="#666" weight="regular" />   // inactive
+<House size={24} color="#111" weight="fill" />       // active
+```
+
+### Bottom navigation — Liquid Glass (Option C)
+
+`apps/mobile/components/LiquidGlassTabBar.tsx`.
+
+- Full-width edge-to-edge glass bar (`BlurView` intensity 50, light tint, no rounded corners).
+- Icons only, **no labels**. 5 equal-flex slots: home · crew · FAB · plans · profile.
+- FAB is **inline** (not raised). Dark `#111` 44px circle, white `Plus` icon (bold).
+- Active icon = `fill` + ink, spring-scales to `1.1`. Inactive = `regular` + `#666`.
+- `useSafeAreaInsets().bottom` respected so it clears the iOS home indicator.
+- Content scrolls visibly **beneath** the glass — every scroll container under `(tabs)/` gets `paddingBottom: 100` so the last item clears the nav.
+- Native deps: `expo-blur`, `phosphor-react-native`, `react-native-svg`, `react-native-reanimated`. Any change to these requires `expo prebuild` + `expo run:ios`.
+
 ### Patterns + gotchas specific to mobile
 
 **Pressable styles must be static objects.** Never `style={({pressed}) => ({...})}` — that form silently drops `backgroundColor`, `borderColor`, and `flexDirection` on iOS RN in this SDK. Cards render flat, rows stack as columns. Use `style={{...}}`. Press feedback still fires via the native default. (Burned us in PR #19.)
@@ -409,6 +479,8 @@ Three options, in order of fidelity:
 11. **Plus Jakarta Sans only goes to 800 ExtraBold** in `@expo-google-fonts` — no 900 Black. Importing the undef name poisons `useFonts` and falls everything back to system fonts.
 12. **Web preview lies about translucency + shadows + Pressable** — `react-native-web` re-implements these. Always verify in iOS Simulator before trusting the design.
 13. **Native build setup**: CocoaPods ≥1.16 + `LANG=en_US.UTF-8` for `expo prebuild`. `apps/mobile/ios/` is gitignored.
+14. **Mobile uses Phosphor only** (`phosphor-react-native`), not Ionicons. `@expo/vector-icons` is removed from the mobile package. Don't reintroduce it — see [Mobile app → Icons](#icons--phosphor) for the convention.
+15. **`react-native-svg` is a native module** — Phosphor requires it. Adding Phosphor (or any other SVG library) means a `expo prebuild` + `expo run:ios` rebuild; Fast Refresh on an older build won't pick it up.
 
 ---
 

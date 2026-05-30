@@ -176,7 +176,7 @@ export default function Plans() {
           contentContainerStyle={{
             paddingTop: 12,
             // Clears the floating LiquidGlassTabBar (was insets.bottom + 12).
-            paddingBottom: 110,
+            paddingBottom: 100,
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />

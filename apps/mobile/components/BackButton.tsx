@@ -1,5 +1,7 @@
 import { Pressable } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { CaretLeft } from 'phosphor-react-native'
+
+import { ICON_COLORS } from '../constants/icons'
 
 export function BackButton({ onPress }: { onPress: () => void }) {
   return (
@@ -15,7 +17,7 @@ export function BackButton({ onPress }: { onPress: () => void }) {
       }}
       hitSlop={8}
     >
-      <Ionicons name="arrow-back" size={18} color="#111111" />
+      <CaretLeft size={18} weight="bold" color={ICON_COLORS.active} />
     </Pressable>
   )
 }

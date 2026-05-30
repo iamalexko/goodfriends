@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { CaretRight } from 'phosphor-react-native'
 
 // Compact group identity chip — shown in the Home greeting row. Taps route
 // to the Crew tab. Visually: a row of up to 4 overlapping emoji faces, the
@@ -101,7 +101,7 @@ export function CrewPill({
         </Text>
       </View>
 
-      <Ionicons name="chevron-forward" size={10} color="#DDDDDD" />
+      <CaretRight size={10} weight="bold" color="#DDDDDD" />
     </Pressable>
   )
 }
