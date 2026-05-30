@@ -154,6 +154,12 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
 //
 // (iOS < 26 / Android: GlassView isn't available, so the solid region and
 // the strips use BlurView instead — same stepped-opacity feather.)
+// Visibility knobs — regular glass over warm paper is subtle, so a faint warm
+// tint gives the lens presence without turning it into an opaque bar. Keep
+// TINT alpha low (≤ ~0.3) so it still reads as glass, not a solid panel.
+const GLASS_STYLE = 'regular' as const
+const TINT = 'rgba(255, 251, 245, 0.85)'
+
 function GlassBlend({ topInset }: { topInset: number }) {
   const HEADER_H = topInset + 52
   const FADE = 32
@@ -162,7 +168,11 @@ function GlassBlend({ topInset }: { topInset: number }) {
 
   // Solid region — full-strength real glass behind the header rows.
   const Solid = LIQUID ? (
-    <GlassView style={{ height: HEADER_H }} glassEffectStyle="regular" />
+    <GlassView
+      style={{ height: HEADER_H }}
+      glassEffectStyle={GLASS_STYLE}
+      tintColor={TINT}
+    />
   ) : (
     <BlurView intensity={90} tint="light" style={{ height: HEADER_H }} />
   )
@@ -187,7 +197,12 @@ function GlassBlend({ topInset }: { topInset: number }) {
           opacity,
         }
         return LIQUID ? (
-          <GlassView key={i} glassEffectStyle="regular" style={stripStyle} />
+          <GlassView
+            key={i}
+            glassEffectStyle={GLASS_STYLE}
+            tintColor={TINT}
+            style={stripStyle}
+          />
         ) : (
           <BlurView key={i} intensity={90} tint="light" style={stripStyle} />
         )
