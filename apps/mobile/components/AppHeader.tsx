@@ -170,7 +170,11 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
 // NB: GlassView's native tint only re-applies on a FULL app reload, not Fast
 // Refresh — if a tint tweak looks like a no-op, relaunch the app.
 const GLASS_STYLE = 'regular' as const
-const TINT = 'rgba(255, 251, 245, 0.85)'
+// Lower tint (0.3) so the SCROLLED glass state is visually distinct from the
+// at-rest solid cream panel — otherwise we'd be crossfading cream→cream and
+// the transition would be imperceptible. At this tint the lens reads as real
+// glass (content/cards show through, frosted) rather than a flat color.
+const TINT = 'rgba(255, 251, 245, 0.3)'
 
 // The glass background — a single real iOS 26 GlassView (live lens /
 // refraction) the full height of the header, with a clean straight bottom
