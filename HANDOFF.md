@@ -380,17 +380,22 @@ import { House } from 'phosphor-react-native'
 <House size={24} color="#111" weight="fill" />       // active
 ```
 
-### Bottom navigation — Liquid Glass (Option C)
+### Bottom navigation — News+ floating glass (Option B)
 
-`apps/mobile/components/LiquidGlassTabBar.tsx`.
+`apps/mobile/components/LiquidGlassTabBar.tsx` + `components/GlassSurface.tsx`.
 
-- Full-width edge-to-edge glass bar (`BlurView` intensity 50, light tint, no rounded corners).
-- Icons only, **no labels**. 5 equal-flex slots: home · crew · FAB · plans · profile.
-- FAB is **inline** (not raised). Dark `#111` 44px circle, white `Plus` icon (bold).
-- Active icon = `fill` + ink, spring-scales to `1.1`. Inactive = `regular` + `#666`.
-- `useSafeAreaInsets().bottom` respected so it clears the iOS home indicator.
-- Content scrolls visibly **beneath** the glass — every scroll container under `(tabs)/` gets `paddingBottom: 100` so the last item clears the nav.
-- Native deps: `expo-blur`, `phosphor-react-native`, `react-native-svg`, `react-native-reanimated`. Any change to these requires `expo prebuild` + `expo run:ios`.
+- **Floating pill** with 4 labelled tabs (`Home · Crew · Plans · Profile`) and a **detached dark 58px Create circle** to the right of the pill.
+- Pill is rendered via `<GlassSurface>` which:
+  - Uses **real iOS 26 Liquid Glass** (`expo-glass-effect`'s `GlassView` with `glassEffectStyle="regular"`) when `isLiquidGlassAvailable()` returns true. This is a genuine system material — content scrolling beneath refracts properly, not just blurs.
+  - **Falls back to `BlurView`** (intensity 40, light tint, 1px white inner border, soft drop shadow) on iOS < 26.
+  - `isLiquidGlassAvailable()` is called **once at module load** per Expo docs — some iOS 26 beta builds ship without the API and calling `GlassView` unconditionally crashes.
+- Active tab: Phosphor icon swaps to `fill` + ink (`#111`), label `#111`, spring-scales to `1.08`. Inactive: `regular` + `#888`.
+- Tab labels: `Inter_600SemiBold`, 9px.
+- Create circle: dark `rgba(17,17,17,0.92)`, 58px, white `Plus` icon (bold, 26px), shadow + 1px white-translucent border for the glass-on-glass edge.
+- Sits at `bottom: Math.max(insets.bottom, 16) + 8`, horizontal margin 14px.
+- Content scrolls visibly **beneath** the glass — every scroll container under `(tabs)/` gets `paddingBottom: 120` so the last item clears the floating nav.
+- Haptics: Light on tab tap, Medium on Create circle tap.
+- Native deps: `expo-glass-effect`, `expo-blur`, `phosphor-react-native`, `react-native-svg`, `react-native-reanimated`. Any change requires `expo prebuild` + `expo run:ios`.
 
 ### Patterns + gotchas specific to mobile
 
@@ -481,6 +486,7 @@ import { House } from 'phosphor-react-native'
 13. **Native build setup**: CocoaPods ≥1.16 + `LANG=en_US.UTF-8` for `expo prebuild`. `apps/mobile/ios/` is gitignored.
 14. **Mobile uses Phosphor only** (`phosphor-react-native`), not Ionicons. `@expo/vector-icons` is removed from the mobile package. Don't reintroduce it — see [Mobile app → Icons](#icons--phosphor) for the convention.
 15. **`react-native-svg` is a native module** — Phosphor requires it. Adding Phosphor (or any other SVG library) means a `expo prebuild` + `expo run:ios` rebuild; Fast Refresh on an older build won't pick it up.
+16. **`expo-glass-effect` API guard** — always call `isLiquidGlassAvailable()` ONCE at module load before rendering `<GlassView>`. Some iOS 26 beta builds ship without the API and an unguarded `<GlassView>` crashes the app. See `components/GlassSurface.tsx` for the canonical pattern — re-use that wrapper rather than calling `<GlassView>` directly anywhere else.
 
 ---
 
