@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Ionicons } from '@expo/vector-icons'
+import { Bell } from 'phosphor-react-native'
 import { useRouter } from 'expo-router'
+
+import { ICON_COLORS } from '../constants/icons'
 
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -103,7 +105,7 @@ export function TopBar() {
             justifyContent: 'center',
           }}
         >
-          <Ionicons name="notifications-outline" size={14} color="#111111" />
+          <Bell size={16} weight="regular" color={ICON_COLORS.active} />
           {unread > 0 && (
             <View
               style={{

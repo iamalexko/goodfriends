@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Ionicons } from '@expo/vector-icons'
+import { CaretDown, Check } from 'phosphor-react-native'
 import { useRouter } from 'expo-router'
 
 import { supabase } from '../../lib/supabase'
@@ -240,7 +240,9 @@ export default function Home() {
         <ScrollView
           contentContainerStyle={{
             paddingTop: 4,
-            paddingBottom: Math.max(20, insets.bottom + 12),
+            // Clears the floating LiquidGlassTabBar (~88px pill, 28px from
+            // bottom). Was `insets.bottom + 12` for the system tab bar.
+            paddingBottom: 100,
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
@@ -260,7 +262,7 @@ export default function Home() {
             <Pressable onPress={() => setShowSortSheet(true)} hitSlop={6}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                 <Text style={sectionLabelStyle}>Sort by: {sortLabel[sortMode]}</Text>
-                <Ionicons name="chevron-down" size={9} color="#BBBBBB" />
+                <CaretDown size={10} weight="bold" color="#BBBBBB" />
               </View>
             </Pressable>
           </View>
@@ -481,7 +483,7 @@ export default function Home() {
                       {opt.sub}
                     </Text>
                   </View>
-                  {active && <Ionicons name="checkmark" size={18} color="#FB923C" />}
+                  {active && <Check size={18} weight="bold" color="#FB923C" />}
                 </Pressable>
               )
             })}

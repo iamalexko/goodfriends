@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { CalendarBlank } from 'phosphor-react-native'
 
 import { Pill } from './Pill'
 
@@ -75,7 +75,8 @@ export function PlanCard({
     >
       {isPendingOpen && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-          <Ionicons name="ellipse" size={6} color="#FB923C" />
+          {/* Plain 6px circle — Phosphor's smallest icon is overkill for this dot */}
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FB923C' }} />
           <Text style={{
             fontFamily: 'Inter_700Bold',
             fontSize: 11,
@@ -113,7 +114,7 @@ export function PlanCard({
 
       {/* Row 2 — date · time · location */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-        <Ionicons name="calendar-outline" size={13} color="#AAAAAA" />
+        <CalendarBlank size={14} weight="regular" color="#AAAAAA" />
         <Text
           style={{
             flex: 1,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Ionicons } from '@expo/vector-icons'
+import { PencilSimple } from 'phosphor-react-native'
 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -106,7 +106,8 @@ export default function Profile() {
 
       <ScrollView
         contentContainerStyle={{
-          paddingBottom: Math.max(20, insets.bottom + 12),
+          // Clears the floating LiquidGlassTabBar (was insets.bottom + 12).
+          paddingBottom: 100,
         }}
       >
         {/* Hero */}
@@ -142,7 +143,7 @@ export default function Profile() {
                 elevation: 3,
               }}
             >
-              <Ionicons name="pencil" size={11} color="#FFFFFF" />
+              <PencilSimple size={12} weight="bold" color="#FFFFFF" />
             </View>
           </Pressable>
 
