@@ -31,7 +31,7 @@ export default function TabLayout() {
         </NativeTabs.Trigger>
 
         <NativeTabs.Trigger name="crew">
-          <Icon sf={{ default: 'person.2', selected: 'person.2.fill' }} />
+          <Icon sf={{ default: 'heart', selected: 'heart.fill' }} />
           <Label>Crew</Label>
         </NativeTabs.Trigger>
 
