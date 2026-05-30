@@ -175,8 +175,9 @@ export default function Plans() {
         <ScrollView
           contentContainerStyle={{
             paddingTop: 12,
-            // Clears the floating LiquidGlassTabBar (was insets.bottom + 12).
-            paddingBottom: 120,
+            // NativeTabs handles bottom insets automatically for the first
+            // ScrollView in each tab screen.
+            paddingBottom: 24,
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
@@ -184,7 +185,7 @@ export default function Plans() {
         >
           {list.length === 0 ? (
             tab === 'upcoming' ? (
-              <EmptyUpcoming onCreate={() => router.push('/(tabs)/create' as any)} />
+              <EmptyUpcoming onCreate={() => router.push('/create' as any)} />
             ) : (
               <EmptyPast />
             )

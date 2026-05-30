@@ -52,7 +52,14 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <StatusBar style="dark" backgroundColor="#FFFBF5" />
-        <Stack screenOptions={{ headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false }}>
+          {/* `create` lives outside the (tabs) group — opens as a modal sheet
+              over whatever tab the user was on. */}
+          <Stack.Screen
+            name="create"
+            options={{ presentation: 'modal', headerShown: false }}
+          />
+        </Stack>
       </AuthProvider>
     </GestureHandlerRootView>
   )

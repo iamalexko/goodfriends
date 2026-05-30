@@ -106,8 +106,9 @@ export default function Profile() {
 
       <ScrollView
         contentContainerStyle={{
-          // Clears the floating LiquidGlassTabBar (was insets.bottom + 12).
-          paddingBottom: 120,
+          // NativeTabs handles bottom insets automatically for the first
+          // ScrollView in each tab screen.
+          paddingBottom: 24,
         }}
       >
         {/* Hero */}

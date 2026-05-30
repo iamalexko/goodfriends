@@ -5,6 +5,7 @@ import { Bell } from 'phosphor-react-native'
 import { useRouter } from 'expo-router'
 
 import { ICON_COLORS } from '../constants/icons'
+import { CreatePlanButton } from './CreatePlanButton'
 
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -92,6 +93,10 @@ export function TopBar() {
       </Text>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {/* "+ Plan" pill — opens the create modal. Lives in TopBar so it's
+            reachable from every tab (Home/Crew/Plans/Profile). */}
+        <CreatePlanButton />
+
         {/* Bell with optional unread badge */}
         <Pressable
           onPress={() => router.push('/notifications' as any)}
