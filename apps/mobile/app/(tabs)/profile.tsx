@@ -106,7 +106,8 @@ export default function Profile() {
 
       <ScrollView
         contentContainerStyle={{
-          paddingBottom: Math.max(20, insets.bottom + 12),
+          // Clears the floating LiquidGlassTabBar (was insets.bottom + 12).
+          paddingBottom: 110,
         }}
       >
         {/* Hero */}

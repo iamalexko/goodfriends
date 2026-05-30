@@ -240,7 +240,9 @@ export default function Home() {
         <ScrollView
           contentContainerStyle={{
             paddingTop: 4,
-            paddingBottom: Math.max(20, insets.bottom + 12),
+            // Clears the floating LiquidGlassTabBar (~88px pill, 28px from
+            // bottom). Was `insets.bottom + 12` for the system tab bar.
+            paddingBottom: 110,
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
