@@ -242,7 +242,7 @@ export default function Home() {
             paddingTop: 4,
             // Clears the floating LiquidGlassTabBar (~88px pill, 28px from
             // bottom). Was `insets.bottom + 12` for the system tab bar.
-            paddingBottom: 100,
+            paddingBottom: 120,
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
