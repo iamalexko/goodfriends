@@ -149,10 +149,19 @@ function GlassBlend({ topInset }: { topInset: number }) {
   const HEADER_H = topInset + 52
   const FADE = 24
 
+  // iOS 26 `regular` glass alone reads too subtle against a warm-paper
+  // background — almost transparent. A nearly-opaque warm tint biases the
+  // material toward the page color so the glass reads as a clear soft frost
+  // panel (still refracts content beneath via the underlying GlassView
+  // lens). For the BlurView fallback, intensity 90 = Apple's "system thick".
   const Material = LIQUID ? (
-    <GlassView style={{ flex: 1 }} glassEffectStyle="regular" />
+    <GlassView
+      style={{ flex: 1 }}
+      glassEffectStyle="regular"
+      tintColor="rgba(255, 251, 245, 0.85)"
+    />
   ) : (
-    <BlurView intensity={40} tint="light" style={{ flex: 1 }} />
+    <BlurView intensity={90} tint="light" style={{ flex: 1 }} />
   )
 
   return (
