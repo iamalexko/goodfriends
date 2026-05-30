@@ -154,9 +154,16 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
 //
 // (iOS < 26 / Android: GlassView isn't available, so the solid region and
 // the strips use BlurView instead — same stepped-opacity feather.)
-// Visibility knobs — regular glass over warm paper is subtle, so a faint warm
-// tint gives the lens presence without turning it into an opaque bar. Keep
-// TINT alpha low (≤ ~0.3) so it still reads as glass, not a solid panel.
+// Visibility knobs — `regular` glass over the warm-paper background is subtle
+// (the lens has little tonal contrast to refract), so a warm tint biased
+// toward the page color gives it presence. 0.85 is intentionally strong: it
+// reads as a clear warm-frost panel while the underlying GlassView still
+// refracts content beneath (verified on iOS 26 — the title that scrolls under
+// the header blurs; content below the feather stays sharp). Lower toward ~0.5
+// for a more transparent, airier look; raise toward 1.0 for a near-solid bar.
+//
+// NB: GlassView's native tint only re-applies on a FULL app reload, not Fast
+// Refresh — if a tint tweak looks like a no-op, relaunch the app.
 const GLASS_STYLE = 'regular' as const
 const TINT = 'rgba(255, 251, 245, 0.85)'
 
