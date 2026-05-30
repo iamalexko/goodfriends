@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Pressable, RefreshControl, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import Animated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+} from 'react-native-reanimated'
 
 import { supabase } from '../../lib/supabase'
-import { TopBar } from '../../components/TopBar'
+import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
 import { PlanCard, Plan } from '../../components/PlanCard'
 import { Loader } from '../../components/Loader'
 
@@ -93,96 +97,109 @@ export default function Plans() {
 
   const list = tab === 'upcoming' ? upcoming : past
 
+  // scrollY drives AppHeader's glass fade-in (UI-thread driven).
+  const scrollY = useSharedValue(0)
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y
+  })
+
+  // Top padding clears the AppHeader (insets.top + 52 row + 12 breathing).
+  const headerPadTop = insets.top + APP_HEADER_ROW_HEIGHT + 12
+
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
-      <TopBar />
-
-      <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 }}>
-        <Text
-          style={{
-            fontFamily: 'PlusJakartaSans_800ExtraBold',
-            fontSize: 32,
-            fontWeight: '800',
-            color: '#111111',
-            letterSpacing: -1,
-            lineHeight: 32,
-          }}
-        >
-          Plans.
-        </Text>
-        <Text
-          style={{
-            fontFamily: 'Inter_500Medium',
-            fontSize: 12,
-            color: '#AAAAAA',
-            marginTop: 4,
-          }}
-        >
-          everything you've said yes to
-        </Text>
-      </View>
-
-      {/* Tab bar */}
-      <View
-        style={{
-          paddingHorizontal: 20,
-          borderBottomWidth: 1,
-          borderBottomColor: 'rgba(0,0,0,0.06)',
-          flexDirection: 'row',
-        }}
-      >
-        {([
-          { id: 'upcoming' as const, label: 'Upcoming' },
-          { id: 'past' as const, label: 'Past' },
-        ]).map((t) => {
-          const active = tab === t.id
-          return (
-            <Pressable
-              key={t.id}
-              onPress={() => setTab(t.id)}
-              style={{ paddingHorizontal: 16, paddingVertical: 10, position: 'relative' }}
-            >
-              <Text
-                style={{
-                  fontFamily: 'Inter_700Bold',
-                  fontSize: 13,
-                  fontWeight: '700',
-                  color: active ? '#111111' : '#BBBBBB',
-                }}
-              >
-                {t.label}
-              </Text>
-              {active && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    right: 0,
-                    bottom: -1,
-                    height: 2,
-                    backgroundColor: '#FB923C',
-                  }}
-                />
-              )}
-            </Pressable>
-          )
-        })}
-      </View>
-
       {loading ? (
-        <Loader />
+        <View style={{ flex: 1, paddingTop: headerPadTop }}>
+          <Loader />
+        </View>
       ) : (
-        <ScrollView
+        <Animated.ScrollView
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={{
-            paddingTop: 12,
-            // NativeTabs handles bottom insets automatically for the first
-            // ScrollView in each tab screen.
+            paddingTop: headerPadTop,
+            // NativeTabs handles bottom insets automatically.
             paddingBottom: 24,
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
           }
         >
+          {/* Hero — scrolls under the AppHeader glass. */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}>
+            <Text
+              style={{
+                fontFamily: 'PlusJakartaSans_800ExtraBold',
+                fontSize: 32,
+                fontWeight: '800',
+                color: '#111111',
+                letterSpacing: -1,
+                lineHeight: 32,
+              }}
+            >
+              Plans.
+            </Text>
+            <Text
+              style={{
+                fontFamily: 'Inter_500Medium',
+                fontSize: 12,
+                color: '#AAAAAA',
+                marginTop: 4,
+              }}
+            >
+              everything you've said yes to
+            </Text>
+          </View>
+
+          {/* Tab bar — scrolls with content. */}
+          <View
+            style={{
+              paddingHorizontal: 20,
+              borderBottomWidth: 1,
+              borderBottomColor: 'rgba(0,0,0,0.06)',
+              flexDirection: 'row',
+            }}
+          >
+            {([
+              { id: 'upcoming' as const, label: 'Upcoming' },
+              { id: 'past' as const, label: 'Past' },
+            ]).map((t) => {
+              const active = tab === t.id
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => setTab(t.id)}
+                  style={{ paddingHorizontal: 16, paddingVertical: 10, position: 'relative' }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_700Bold',
+                      fontSize: 13,
+                      fontWeight: '700',
+                      color: active ? '#111111' : '#BBBBBB',
+                    }}
+                  >
+                    {t.label}
+                  </Text>
+                  {active && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: -1,
+                        height: 2,
+                        backgroundColor: '#FB923C',
+                      }}
+                    />
+                  )}
+                </Pressable>
+              )
+            })}
+          </View>
+
+          <View style={{ height: 12 }} />
+
           {list.length === 0 ? (
             tab === 'upcoming' ? (
               <EmptyUpcoming onCreate={() => router.push('/create' as any)} />
@@ -200,8 +217,11 @@ export default function Plans() {
               />
             ))
           )}
-        </ScrollView>
+        </Animated.ScrollView>
       )}
+
+      {/* AppHeader sits OVER the scroll view (zIndex 100). */}
+      <AppHeader scrollY={scrollY} />
     </View>
   )
 }

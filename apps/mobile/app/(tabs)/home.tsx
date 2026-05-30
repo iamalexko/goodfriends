@@ -3,17 +3,20 @@ import {
   Modal,
   Pressable,
   RefreshControl,
-  ScrollView,
   Text,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CaretDown, Check } from 'phosphor-react-native'
 import { useRouter } from 'expo-router'
+import Animated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+} from 'react-native-reanimated'
 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
-import { TopBar } from '../../components/TopBar'
+import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
 import { CrewPill } from '../../components/CrewPill'
 import { PlanCard, Plan } from '../../components/PlanCard'
 import { Pill } from '../../components/Pill'
@@ -184,62 +187,29 @@ export default function Home() {
   const day = new Date().toLocaleDateString('en-AE', { weekday: 'long' })
   const firstName = profile?.display_name?.split(' ')[0] || 'there'
 
+  // scrollY drives AppHeader's glass fade-in. useAnimatedScrollHandler runs
+  // on the UI thread, so the glass opacity tracks the finger 1:1 with no
+  // JS bridge latency.
+  const scrollY = useSharedValue(0)
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y
+  })
+
+  // Top padding clears the AppHeader (insets.top + 52 row + 12 breathing).
+  const headerPadTop = insets.top + APP_HEADER_ROW_HEIGHT + 12
+
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
-      <TopBar />
-
-      {/* Greeting row sits ABOVE the ScrollView so it stays put while
-          plans scroll underneath. */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>
-        <Text
-          style={{
-            fontFamily: 'Inter_500Medium',
-            fontSize: 9,
-            color: '#BBBBBB',
-            letterSpacing: 0.8,
-            textTransform: 'uppercase',
-            marginBottom: 4,
-          }}
-        >
-          {day} · Dubai
-        </Text>
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-        }}>
-          <Text
-            style={{
-              flexShrink: 1,
-              fontFamily: 'PlusJakartaSans_700Bold',
-              fontSize: 22,
-              fontWeight: '700',
-              color: '#111111',
-              letterSpacing: -0.4,
-              lineHeight: 25,
-            }}
-            numberOfLines={1}
-          >
-            Hey {firstName} {profile?.emoji || '👋'}
-          </Text>
-          {group && (
-            <CrewPill
-              groupName={group.name}
-              memberEmojis={group.member_emojis}
-              avgAttendance={group.avg_attendance}
-              onPress={() => router.push('/(tabs)/crew' as any)}
-            />
-          )}
-        </View>
-      </View>
-
       {loading ? (
-        <Loader />
+        <View style={{ flex: 1, paddingTop: headerPadTop }}>
+          <Loader />
+        </View>
       ) : (
-        <ScrollView
+        <Animated.ScrollView
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={{
-            paddingTop: 4,
+            paddingTop: headerPadTop,
             // NativeTabs handles bottom insets automatically for the first
             // ScrollView in each tab screen. Small buffer below the last card.
             paddingBottom: 24,
@@ -248,6 +218,51 @@ export default function Home() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
           }
         >
+          {/* Greeting block — scrolls under the AppHeader glass as the user
+              moves down the feed. */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
+            <Text
+              style={{
+                fontFamily: 'Inter_500Medium',
+                fontSize: 9,
+                color: '#BBBBBB',
+                letterSpacing: 0.8,
+                textTransform: 'uppercase',
+                marginBottom: 4,
+              }}
+            >
+              {day} · Dubai
+            </Text>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}>
+              <Text
+                style={{
+                  flexShrink: 1,
+                  fontFamily: 'PlusJakartaSans_700Bold',
+                  fontSize: 22,
+                  fontWeight: '700',
+                  color: '#111111',
+                  letterSpacing: -0.4,
+                  lineHeight: 25,
+                }}
+                numberOfLines={1}
+              >
+                Hey {firstName} {profile?.emoji || '👋'}
+              </Text>
+              {group && (
+                <CrewPill
+                  groupName={group.name}
+                  memberEmojis={group.member_emojis}
+                  avgAttendance={group.avg_attendance}
+                  onPress={() => router.push('/(tabs)/crew' as any)}
+                />
+              )}
+            </View>
+          </View>
           {/* Coming up section header with sort chip */}
           <View
             style={{
@@ -387,8 +402,14 @@ export default function Home() {
               ))}
             </>
           )}
-        </ScrollView>
+        </Animated.ScrollView>
       )}
+
+      {/* AppHeader sits OVER the scroll view (zIndex 100). The wordmark
+          + "+ Plan" + bell are always visible; only the glass background
+          fades in as the user scrolls. Rendered after the scroll view so
+          it stacks on top. */}
+      <AppHeader scrollY={scrollY} />
 
       {/* Sort sheet */}
       <Modal

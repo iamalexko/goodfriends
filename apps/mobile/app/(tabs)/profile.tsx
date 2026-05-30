@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PencilSimple } from 'phosphor-react-native'
+import Animated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+} from 'react-native-reanimated'
 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
-import { TopBar } from '../../components/TopBar'
+import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
 import { Pill } from '../../components/Pill'
 import { StatCell } from '../../components/StatCell'
 import { Loader } from '../../components/Loader'
@@ -100,14 +104,23 @@ export default function Profile() {
   if ((scores?.attendance_rate ?? 0) >= 85) TAGS.push({ label: 'Always shows up', variant: 'pink' })
   if ((scores?.plans_organised ?? 0) >= 1) TAGS.push({ label: 'Taste curator', variant: 'gold' })
 
+  // scrollY drives AppHeader's glass fade-in (UI-thread driven).
+  const scrollY = useSharedValue(0)
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y
+  })
+
+  // Top padding clears the AppHeader (insets.top + 52 row + 12 breathing).
+  const headerPadTop = insets.top + APP_HEADER_ROW_HEIGHT + 12
+
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
-      <TopBar />
-
-      <ScrollView
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={{
-          // NativeTabs handles bottom insets automatically for the first
-          // ScrollView in each tab screen.
+          paddingTop: headerPadTop,
+          // NativeTabs handles bottom insets automatically.
           paddingBottom: 24,
         }}
       >
@@ -368,7 +381,10 @@ export default function Profile() {
             </Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
+
+      {/* AppHeader sits OVER the scroll view (zIndex 100). */}
+      <AppHeader scrollY={scrollY} />
 
       <EmojiPicker
         visible={emojiPickerOpen}
