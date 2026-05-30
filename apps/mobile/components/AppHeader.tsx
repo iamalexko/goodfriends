@@ -82,9 +82,11 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
     }
   }, [user])
 
-  // Glass fades in over the first 40px of scroll, clamped.
+  // Glass is always visible (full opacity), independent of scroll. The brief
+  // originally faded it in over scrollY 0→40, but that made it invisible at
+  // rest; we keep it on so the header always reads as glass.
   const glassStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP),
+    opacity: 1,
   }))
 
   return (
