@@ -19,10 +19,19 @@ import { useAuth } from '../context/AuthContext'
 // Pattern 2 fixed app header.
 //
 // The wordmark + "+ Plan" pill + bell are ALWAYS visible and pinned. The
-// background is a single REAL iOS 26 GlassView (live lens) spanning the
-// header height, also always visible — never a mask or a paper gradient,
-// and no feather (clean straight bottom edge). See GlassBlend below.
+// background crossfades on scroll between two layers:
+//   • at rest  → a SOLID cream panel matching the page, so the header is
+//     invisible and seamless with the feed (no glass edge-shadow);
+//   • scrolled → the real iOS 26 Liquid Glass (live lens).
+// See AppHeader's body for the crossfade and GlassBlend for the material.
 const LIQUID = isLiquidGlassAvailable()
+
+// Warm-paper page color — must match the screens' backgroundColor so the
+// at-rest header is indistinguishable from the content behind it.
+const PAGE_BG = '#FFFBF5'
+
+// Scroll distance (px) over which the solid→glass crossfade completes.
+const FADE_DISTANCE = 40
 
 export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
   const insets = useSafeAreaInsets()
@@ -77,14 +86,35 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
     }
   }, [user])
 
-  // Glass is always visible (full opacity), independent of scroll.
+  // Two background layers crossfade on scroll:
+  //   • At rest (scrollY 0): a SOLID cream panel, fully opaque. Same color as
+  //     the page, no shadow — so the header is invisible / blends seamlessly
+  //     with the content below. (The native glass edge-shadow only appears
+  //     when the GlassView itself is visible, so hiding the glass at rest
+  //     removes the shadow.)
+  //   • Scrolled (scrollY ≥ FADE_DISTANCE): the real Liquid Glass.
+  // The two opacities are exact inverses → a clean crossfade.
   const glassStyle = useAnimatedStyle(() => ({
-    opacity: 1,
+    opacity: interpolate(scrollY.value, [0, FADE_DISTANCE], [0, 1], Extrapolation.CLAMP),
   }))
+  const solidStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, FADE_DISTANCE], [1, 0], Extrapolation.CLAMP),
+  }))
+
+  const bgHeight = insets.top + APP_HEADER_ROW_HEIGHT
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]} pointerEvents="box-none">
-      {/* Glass background — always visible, single straight-edged GlassView. */}
+      {/* Solid cream panel — visible at rest, fades out on scroll. Blends with
+          the page so there's no header edge / shadow when not scrolled. */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, solidStyle]}
+        pointerEvents="none"
+      >
+        <View style={{ height: bgHeight, backgroundColor: PAGE_BG }} />
+      </Animated.View>
+
+      {/* Liquid glass — fades in on scroll. */}
       <Animated.View
         style={[StyleSheet.absoluteFill, glassStyle]}
         pointerEvents="none"
