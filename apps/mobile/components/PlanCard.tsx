@@ -18,6 +18,8 @@ export type Plan = {
   confirmed_count: number
   likely_count: number
   rsvp_faces?: string[]
+  // Plans screen variant only — organiser embed from the rsvp join.
+  organiser?: { display_name?: string | null; emoji?: string | null } | null
 }
 
 const TIER_VARIANT: Record<1 | 2 | 3, 'tier1' | 'tier2' | 'tier3'> = {
@@ -38,33 +40,40 @@ function formatPlanDate(dateStr: string) {
   return d.toLocaleDateString('en-AE', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
-export function PlanCard({ plan, onPress }: { plan: Plan; onPress?: () => void }) {
-  const isPending = !plan.my_rsvp
+export function PlanCard({
+  plan,
+  onPress,
+  variant = 'home',
+}: {
+  plan: Plan
+  onPress?: () => void
+  variant?: 'home' | 'plans'
+}) {
+  // Pending border only for OPEN plans you haven't replied to — past or
+  // cancelled cards never get the orange glow.
+  const isPendingOpen = !plan.my_rsvp && plan.status === 'open'
 
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => ({
+      // Static style object — passing a function caused iOS RN to drop our
+      // backgroundColor/border somehow. Static works.
+      style={{
         marginHorizontal: 20,
         marginBottom: 10,
         padding: 14,
         borderRadius: 20,
-        // Solid white instead of rgba — translucent white on the cream body
-        // mixes to ~#fffcf6 which is nearly invisible on iOS. Web's glass-card
-        // uses backdrop-filter blur to lift visually; RN can't, so use solid
-        // white + a slightly stronger shadow.
         backgroundColor: '#FFFFFF',
-        borderWidth: isPending ? 1.5 : 1,
-        borderColor: isPending ? '#FB923C' : 'rgba(0,0,0,0.06)',
+        borderWidth: isPendingOpen ? 1.5 : 1,
+        borderColor: isPendingOpen ? '#FB923C' : 'rgba(0,0,0,0.06)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
         shadowRadius: 8,
         elevation: 3,
-        transform: [{ scale: pressed ? 0.99 : 1 }],
-      })}
+      }}
     >
-      {isPending && (
+      {isPendingOpen && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
           <Ionicons name="ellipse" size={6} color="#FB923C" />
           <Text style={{
@@ -120,7 +129,8 @@ export function PlanCard({ plan, onPress }: { plan: Plan; onPress?: () => void }
         </Text>
       </View>
 
-      {/* Row 3 — faces + counts + CTA */}
+      {/* Row 3 — faces + counts. Home variant adds CTA / "You planned this"
+          inline; Plans variant pushes that to its own row below. */}
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -160,25 +170,68 @@ export function PlanCard({ plan, onPress }: { plan: Plan; onPress?: () => void }
           </Text>
         </View>
 
-        {isPending ? (
-          <Text style={{
-            fontFamily: 'Inter_700Bold',
-            fontSize: 11,
-            fontWeight: '700',
-            color: '#FB923C',
-          }}>
-            Reply now
-          </Text>
-        ) : plan.is_organiser ? (
-          <Text style={{
-            fontFamily: 'Inter_500Medium',
-            fontSize: 10,
-            color: '#AAAAAA',
-          }}>
-            You planned this
-          </Text>
-        ) : null}
+        {variant === 'home' && (
+          isPendingOpen ? (
+            <Text style={{
+              fontFamily: 'Inter_700Bold',
+              fontSize: 11,
+              fontWeight: '700',
+              color: '#FB923C',
+            }}>
+              Reply now
+            </Text>
+          ) : plan.is_organiser ? (
+            <Text style={{
+              fontFamily: 'Inter_500Medium',
+              fontSize: 10,
+              color: '#AAAAAA',
+            }}>
+              You planned this
+            </Text>
+          ) : null
+        )}
       </View>
+
+      {/* Row 4 — Plans variant only: organiser line + Closed/Cancelled pill */}
+      {variant === 'plans' && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 8,
+          }}
+        >
+          {plan.is_organiser ? (
+            <Text
+              style={{
+                fontFamily: 'Inter_700Bold',
+                fontSize: 10,
+                fontWeight: '700',
+                color: '#FB923C',
+              }}
+            >
+              You planned this
+            </Text>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={{ fontSize: 13 }}>{plan.organiser?.emoji || '😎'}</Text>
+              <Text
+                style={{
+                  fontFamily: 'Inter_500Medium',
+                  fontSize: 10,
+                  color: '#AAAAAA',
+                }}
+              >
+                Planned by {plan.organiser?.display_name || 'a friend'}
+              </Text>
+            </View>
+          )}
+
+          {plan.status === 'closed' && <Pill variant="mint">Closed</Pill>}
+          {plan.status === 'cancelled' && <Pill variant="neutral">Cancelled</Pill>}
+        </View>
+      )}
     </Pressable>
   )
 }

@@ -336,7 +336,10 @@ export default function Home() {
                 <Pressable
                   key={p.id}
                   // TODO: route to plan detail
-                  style={({ pressed }) => ({
+                  // Static style — Pressable style-as-function drops styles
+                  // on iOS RN in this Expo SDK. Press feedback comes via
+                  // android_ripple / native default.
+                  style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -344,8 +347,7 @@ export default function Home() {
                     paddingVertical: 10,
                     borderBottomWidth: 1,
                     borderBottomColor: 'rgba(0,0,0,0.04)',
-                    opacity: pressed ? 0.85 : 1,
-                  })}
+                  }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     <View
