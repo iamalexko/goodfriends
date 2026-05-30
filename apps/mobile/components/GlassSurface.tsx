@@ -8,23 +8,33 @@ import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 // would crash there. Evaluated once so we don't re-check on every render.
 const LIQUID_GLASS = isLiquidGlassAvailable()
 
+// Variant lets future surfaces opt into different materials. For now only
+// 'chrome' exists (the standard system glass). Anything else (e.g. future
+// 'sheet' / 'modal') falls back to BlurView so the option is non-binding.
+export type GlassVariant = 'chrome'
+
 // Real iOS 26 Liquid Glass when available, BlurView approximation otherwise.
-// Single component so every surface that wants glass calls this and gets the
-// right material automatically.
+// `interactive` toggles the GlassView's isInteractive flag — pressing/holding
+// the surface causes the system material to subtly respond to touch.
 export function GlassSurface({
   children,
   style,
-  radius = 34,
+  radius = 24,
+  variant = 'chrome',
+  interactive = false,
 }: {
   children?: ReactNode
   style?: StyleProp<ViewStyle>
   radius?: number
+  variant?: GlassVariant
+  interactive?: boolean
 }) {
-  if (LIQUID_GLASS) {
+  if (LIQUID_GLASS && variant === 'chrome') {
     return (
       <GlassView
         style={[{ borderRadius: radius, overflow: 'hidden' }, style]}
         glassEffectStyle="regular"
+        isInteractive={interactive}
       >
         {children}
       </GlassView>
