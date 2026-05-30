@@ -18,15 +18,10 @@ import { useAuth } from '../context/AuthContext'
 
 // Pattern 2 fixed app header.
 //
-// The wordmark + "+ Plan" pill + bell are ALWAYS visible (they never
-// translate / fade); only the *background* animates. At scrollY 0 the
-// background is invisible — the buttons sit on warm paper. By scrollY 40
-// the glass background has faded fully in.
-//
-// The background is a REAL iOS 26 GlassView (live lens), feathered at the
-// bottom by a stack of stepped-opacity glass strips so it dissolves into the
-// feed with no hard cut-off line — never a mask or a paper gradient. See
-// GlassBlend below for the full rationale.
+// The wordmark + "+ Plan" pill + bell are ALWAYS visible and pinned. The
+// background is a single REAL iOS 26 GlassView (live lens) spanning the
+// header height, also always visible — never a mask or a paper gradient,
+// and no feather (clean straight bottom edge). See GlassBlend below.
 const LIQUID = isLiquidGlassAvailable()
 
 export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
@@ -82,16 +77,14 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
     }
   }, [user])
 
-  // Glass is always visible (full opacity), independent of scroll. The brief
-  // originally faded it in over scrollY 0→40, but that made it invisible at
-  // rest; we keep it on so the header always reads as glass.
+  // Glass is always visible (full opacity), independent of scroll.
   const glassStyle = useAnimatedStyle(() => ({
     opacity: 1,
   }))
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]} pointerEvents="box-none">
-      {/* Animated glass background — fades in, feathers at bottom. */}
+      {/* Glass background — always visible, single straight-edged GlassView. */}
       <Animated.View
         style={[StyleSheet.absoluteFill, glassStyle]}
         pointerEvents="none"
@@ -136,49 +129,30 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
   )
 }
 
-// The glass background. Real iOS 26 Liquid Glass, feathered at the bottom.
-//
-// REQUIREMENT: the header background MUST be a real `GlassView` (live lens /
-// refraction), not a BlurView and not a tinted-paper approximation.
-//
-// The hard part is feathering its bottom edge. You CANNOT do it with a
-// `MaskedView`: the mask snapshots its subtree to an alpha bitmap, and the
-// glass material is a separate real-time backdrop pass that doesn't survive
-// the snapshot — so a masked GlassView renders only its flat tint, no blur
-// (the "I see no glass" bug). A warm-paper gradient laid OVER the glass also
-// isn't real glass — it just paints page color on top.
-//
-// So we feather with REAL glass: a stack of thin GlassView strips down the
-// fade zone, each a genuine unmasked lens, with stepped opacity from ~0.89
-// at the top of the fade to ~0.11 at the bottom. Ancestor/instance opacity
-// attenuates the live glass, so the lens dissolves progressively into the
-// feed — real glass all the way down, no mask, no paper.
-//
-// (iOS < 26 / Android: GlassView isn't available, so the solid region and
-// the strips use BlurView instead — same stepped-opacity feather.)
 // Visibility knobs — `regular` glass over the warm-paper background is subtle
 // (the lens has little tonal contrast to refract), so a warm tint biased
 // toward the page color gives it presence. 0.85 is intentionally strong: it
 // reads as a clear warm-frost panel while the underlying GlassView still
 // refracts content beneath (verified on iOS 26 — the title that scrolls under
-// the header blurs; content below the feather stays sharp). Lower toward ~0.5
-// for a more transparent, airier look; raise toward 1.0 for a near-solid bar.
+// the header blurs). Lower toward ~0.5 for a more transparent, airier look;
+// raise toward 1.0 for a near-solid bar.
 //
 // NB: GlassView's native tint only re-applies on a FULL app reload, not Fast
 // Refresh — if a tint tweak looks like a no-op, relaunch the app.
 const GLASS_STYLE = 'regular' as const
 const TINT = 'rgba(255, 251, 245, 0.85)'
 
+// The glass background — a single real iOS 26 GlassView (live lens /
+// refraction) the full height of the header, with a clean straight bottom
+// edge. No feather.
+//
+// REQUIREMENT: the background MUST be a real `GlassView`, not a BlurView and
+// not a tinted-paper approximation. (iOS < 26 / Android: GlassView isn't
+// available, so it falls back to a BlurView.)
 function GlassBlend({ topInset }: { topInset: number }) {
   const HEADER_H = topInset + 52
-  // More, thinner strips over a slightly taller fade = a finer opacity ramp
-  // (smaller step between adjacent strips) so the feather reads as a smooth
-  // gradient rather than visible bands.
-  const FADE = 40
-  const STRIPS = 14
 
-  // Solid region — full-strength real glass behind the header rows.
-  const Solid = LIQUID ? (
+  return LIQUID ? (
     <GlassView
       style={{ height: HEADER_H }}
       glassEffectStyle={GLASS_STYLE}
@@ -186,45 +160,6 @@ function GlassBlend({ topInset }: { topInset: number }) {
     />
   ) : (
     <BlurView intensity={90} tint="light" style={{ height: HEADER_H }} />
-  )
-
-  return (
-    <View style={{ height: HEADER_H + FADE }}>
-      {Solid}
-
-      {/* Progressive feather: real-glass strips with stepped opacity. Strip i
-          sits just below the solid region; opacity ramps 1→0 going down so
-          the lens dissolves into the content with no hard cut-off line. */}
-      {Array.from({ length: STRIPS }).map((_, i) => {
-        // Contiguous, pixel-aligned bounds: y1 of strip i == y0 of strip i+1.
-        // No overlap (overlapping translucent glass composites glass-on-glass
-        // into a darker seam) and no gap (a gap would show a sharp un-glassed
-        // line). This pairing is what removes the banding.
-        const y0 = Math.round((i * FADE) / STRIPS)
-        const y1 = Math.round(((i + 1) * FADE) / STRIPS)
-        // Midpoint opacity sample → smooth ramp (~0.96 → ~0.04) with no
-        // full-opacity or fully-transparent strip at the ends.
-        const opacity = 1 - (i + 0.5) / STRIPS
-        const stripStyle = {
-          position: 'absolute' as const,
-          left: 0,
-          right: 0,
-          top: HEADER_H + y0,
-          height: y1 - y0,
-          opacity,
-        }
-        return LIQUID ? (
-          <GlassView
-            key={i}
-            glassEffectStyle={GLASS_STYLE}
-            tintColor={TINT}
-            style={stripStyle}
-          />
-        ) : (
-          <BlurView key={i} intensity={90} tint="light" style={stripStyle} />
-        )
-      })}
-    </View>
   )
 }
 
