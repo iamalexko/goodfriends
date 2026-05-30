@@ -6,62 +6,126 @@ A social commitment app for a friend group in Dubai. Plans → RSVPs → attenda
 
 ## Stack
 
-- **Frontend**: Vite + React 18 (no TypeScript), Tailwind CSS, Framer Motion, lucide-react, react-router-dom is in deps but **not used** — see Routing.
+Monorepo, npm workspaces:
+
+- **`apps/web`** — Vite + React 18 (JS, no TypeScript), Tailwind CSS, Framer Motion, lucide-react. `react-router-dom` is in deps but **not used** — see Routing.
+- **`apps/mobile`** — Expo SDK 54, Expo Router (file-based), React Native 0.81.5, Hermes, NativeWind v4 wired (most components use inline `style` objects), native iOS build via `expo prebuild` + `expo run:ios`.
+- **`packages/shared`** — platform-agnostic constants (`COLORS`, `RSVP_OPTIONS`, `EMOJIS`) + utils (`getMemberTags`, `getGroupTags`, `getTimeTag`, `formatTimeAgo`, `getPriorityScore`). Consumed via `@goodfriends/shared`.
 - **Backend**: Supabase (Postgres 17, RLS, Realtime, Edge Functions, Storage, pg_cron)
-- **Hosting**: Vercel (auto-deploys from `main`)
+- **Hosting (web)**: Vercel auto-deploys from `main`, root `vercel.json` builds `apps/web/`
+- **Mobile distribution**: local native build for now (no TestFlight / EAS yet)
 - **Repo**: https://github.com/iamalexko/goodfriends (public)
-- **Live URL**: https://goodfriends-git-main-alex-ko-projects.vercel.app
+- **Live web URL**: https://goodfriends-git-main-alex-ko-projects.vercel.app
 
 ## Run locally
 
 ```bash
+# install everything (web + mobile + shared)
 npm install
-npm run dev   # http://localhost:5173
 ```
 
-Requires `.env.local`:
-
+**Web:**
+```bash
+npm run web              # or: cd apps/web && npm run dev
+# → http://localhost:5173
+```
+Requires `apps/web/.env`:
 ```
 VITE_SUPABASE_URL=https://ligemjbtjpqmrrwyiiyu.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_hhoJDZ5D-V_rtcsbMPrSGA_rBSmvq1t
 ```
 
-`.claude/launch.json` has a hardcoded node path — committed but environment-specific. Update or ignore for your env.
+**Mobile** (see the dedicated [Mobile app](#mobile-app-appsmobile) section for the full dev loop):
+```bash
+cd apps/mobile
+# JS-only iteration (fast — bundle reloads in the already-installed native app)
+npx expo start
+# Native rebuild (5-10 min, only when app.json / native deps / permissions change)
+npx expo run:ios
+```
+Requires `apps/mobile/.env`:
+```
+EXPO_PUBLIC_SUPABASE_URL=https://ligemjbtjpqmrrwyiiyu.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_hhoJDZ5D-V_rtcsbMPrSGA_rBSmvq1t
+```
+
+If you've never built mobile before:
+```bash
+cd apps/mobile && npx expo prebuild --platform ios --clean   # generates apps/mobile/ios/
+npx expo run:ios                                              # first build ~5-10 min
+```
+
+`.claude/launch.json` has a hardcoded node path — committed but environment-specific. Update or ignore for your env. Defines `expo-web` server config for Claude Preview MCP (see [Mobile app](#mobile-app-appsmobile)).
 
 ---
 
 ## File layout
 
 ```
-src/
-  App.jsx                 ← root + custom switch-based router
-  main.jsx                ← entry
-  index.css               ← design tokens, .phone-shell, .orb, .glass-card, .scroll-area
-  lib/supabase.js         ← supabase client
-  context/AuthContext.jsx ← session + profile fetching, useAuth() hook
-  components/UI.jsx       ← shared low-level: TopBar, NavBar, EmojiAvatar, Pill,
-                              BackButton, SectionHeader, Divider, Orb, StatCell
-  screens/
-    Auth.jsx              ← email + password
-    Home.jsx              ← upcoming + past plans, sort control
-    Crew.jsx              ← podium + race + identity tags + stats
-    CreatePlan.jsx        ← 2-step (tier → form), invites
-    PlanDetail.jsx        ← RSVP + edit + delete + moments feed (posts+reactions+photos) + close event
-    Plans.jsx             ← list view
-    Profile.jsx           ← scores + history + emoji picker
-    Summary.jsx           ← monthly recap
-    Notifications.jsx     ← bell-icon list view
-    JoinPage.jsx          ← public /join/:code redemption
-supabase/
-  functions/send-reminders/index.ts   ← daily reminders + no-reply nudges (cron, no auth)
-  functions/generate-summary/index.ts ← AI monthly recap via Gemini 2.5 Flash (user-invoked, JWT auth)
-  config.toml                         ← project id + cron schedule
-supabase-schema.sql                   ← committed schema for reference (run once on setup)
+/
+├── apps/
+│   ├── web/                ← Vite + React, the production app
+│   │   ├── src/
+│   │   │   ├── App.jsx                 ← root + custom switch-based router
+│   │   │   ├── main.jsx                ← entry
+│   │   │   ├── index.css               ← design tokens, .phone-shell, .orb,
+│   │   │   │                              .glass-card, .scroll-area
+│   │   │   ├── lib/supabase.js         ← Vite-flavoured client (import.meta.env)
+│   │   │   ├── context/AuthContext.jsx ← session + profile + useAuth()
+│   │   │   ├── components/UI.jsx       ← TopBar, NavBar, EmojiAvatar, Pill,
+│   │   │   │                              BackButton, SectionHeader, Divider, Orb,
+│   │   │   │                              StatCell, Loader
+│   │   │   └── screens/                ← Auth, Home, Crew, CreatePlan, PlanDetail,
+│   │   │                                  Plans, Profile, Summary, Notifications,
+│   │   │                                  JoinPage
+│   │   ├── index.html, vite.config.js, tailwind.config.js, postcss.config.js
+│   │   └── package.json   (name: "@goodfriends/web")
+│   │
+│   └── mobile/             ← Expo SDK 54, native iOS build via expo prebuild
+│       ├── app/                  ← Expo Router file-based routes
+│       │   ├── _layout.tsx       ← fonts + AuthProvider + StatusBar + GestureHandler
+│       │   ├── index.tsx         ← auth gate redirect
+│       │   ├── auth.tsx          ← login + signup toggle
+│       │   └── (tabs)/
+│       │       ├── _layout.tsx   ← bottom tab bar
+│       │       ├── home.tsx      ← real, ports apps/web/.../Home.jsx
+│       │       ├── crew.tsx      ← placeholder
+│       │       ├── create.tsx    ← placeholder (Phase 3)
+│       │       ├── plans.tsx     ← real, Upcoming/Past tabs
+│       │       └── profile.tsx   ← real, hero + stats + history + emoji picker
+│       ├── components/           ← TopBar, NavBar, Pill, EmojiAvatar,
+│       │                            BackButton, SectionHeader, Loader,
+│       │                            PlanCard, CrewPill, EmojiPicker, StatCell,
+│       │                            PlaceholderScreen
+│       ├── context/AuthContext.tsx
+│       ├── lib/supabase.ts       ← Platform-split: SecureStore (native) / localStorage (web)
+│       ├── ios/                  ← GITIGNORED — regenerated by expo prebuild
+│       ├── app.json, babel.config.js, metro.config.js,
+│       │   tailwind.config.js, global.css, tsconfig.json
+│       └── package.json   (name: "@goodfriends/mobile")
+│
+├── packages/
+│   └── shared/             ← platform-agnostic; consumed via @goodfriends/shared
+│       ├── index.js        ← barrel
+│       ├── constants.js    ← COLORS, TIER_*, RSVP_OPTIONS, EMOJIS, MEMBER_GRADIENTS
+│       ├── utils/scoring.js  ← getMemberTags, getGroupTags
+│       └── utils/time.js     ← getTimeTag, formatTimeAgo, getPriorityScore
+│
+├── supabase/
+│   ├── functions/send-reminders/index.ts   ← daily reminders + nudges (cron, no auth)
+│   ├── functions/generate-summary/index.ts ← Gemini 2.5 Flash recaps (user, JWT)
+│   └── config.toml                         ← project id + cron schedule
+├── supabase-schema.sql                     ← committed schema for reference
+├── vercel.json                             ← root: builds apps/web/ + SPA rewrite
+├── package.json                            ← workspace root, hoists react-native + semver
+└── .claude/launch.json                     ← Claude Preview servers (vite-dev, expo-web)
 ```
 
 ---
 
 ## Routing
+
+### Web (`apps/web`)
 
 **There is no react-router**, despite the dep. `App.jsx` keeps `screen` in state and renders via a `switch`. Navigate by calling `navigate(id, params)` passed from `App` into every screen. Params land as props.
 
@@ -79,6 +143,26 @@ case 'notifications': return <Notifications {...props} />
 To add a screen: create the file, add an import + case in `App.jsx`, navigate from anywhere via `navigate('your-screen-id')`.
 
 **Special path**: `/join/:code` is handled in `App.jsx` before auth gating — public link for invite redemption.
+
+### Mobile (`apps/mobile`)
+
+**Expo Router**, file-based. Anything in `app/` is a route. Folders in parens like `(tabs)/` are route groups (don't appear in URLs).
+
+```
+/         → app/index.tsx       (auth gate → /auth or /(tabs)/home)
+/auth     → app/auth.tsx        (login + signup toggle)
+/(tabs)/home, /crew, /create, /plans, /profile
+```
+
+Navigate with `useRouter()`:
+```tsx
+import { useRouter } from 'expo-router'
+const router = useRouter()
+router.push('/(tabs)/home' as any)
+router.replace('/auth' as any)
+```
+
+**Critical**: after sign in or sign up, **explicitly call `router.replace('/(tabs)/home')`**. The auth gate at `app/index.tsx` only runs when someone hits `/` — sitting on `/auth` after auth success doesn't bounce you anywhere. (Discovered and fixed in PR #20.)
 
 ---
 
@@ -188,6 +272,96 @@ Defined in `src/index.css` and Tailwind config:
 
 ---
 
+## Mobile app (`apps/mobile`)
+
+### Status by phase
+
+- ✅ **Phase 1** — UI primitives (TopBar, NavBar, Pill, EmojiAvatar, BackButton, SectionHeader, Loader) + full Auth flow (login + signup + onboarding emoji). PR #17.
+- ✅ **Phase 2.1** — Home (greeting, CrewPill, sort sheet, plan cards, past plans). PR #18.
+- ✅ **Phase 2.2** — Plans (Upcoming/Past tabs) + Profile (hero + stats + history + emoji picker) + EmojiPicker + StatCell. PR #19.
+- ✅ Auth-screen post-signin redirect + TopBar error handling. PRs #20, #21.
+- ✅ **Native iOS build** via `expo prebuild` — replaces Expo Go for development. PR #22.
+- ⏳ **Phase 3** — CreatePlan (3-step wizard) + PlanDetail (RSVP tiles + moments + edit/delete sheets). NOT STARTED. Biggest screen on web (~1700 lines).
+- ⏳ **Phase 4** — Crew (identity header + podium + race + stats).
+- ⏳ **Phase 5** — Notifications screen, Summary screen, deep-link handling for `goodfriends://join/...`, push notifications.
+
+### Dev loop
+
+Two modes. Pick by what changed:
+
+**JS-only edits → fast loop** (Fast Refresh, ~2s reload):
+```bash
+cd apps/mobile && npx expo start
+# Press `i` to launch the already-installed native build in the simulator.
+# Edit any .tsx — saves, reloads in seconds.
+```
+
+**Native config changed → rebuild** (5-10 min):
+Triggered by edits to `app.json`, new permissions, new native modules, or new icons.
+```bash
+cd apps/mobile && npx expo run:ios
+```
+
+### Local preview for agents (so you don't need to scan QRs at the user)
+
+Three options, in order of fidelity:
+
+1. **iOS Simulator** (highest fidelity, real iOS rendering, what production runs).
+   - Boot once: `xcrun simctl boot "iPhone 17"` then `open -a Simulator`.
+   - Screenshot at any time: `xcrun simctl io booted screenshot /tmp/x.png` → then `Read /tmp/x.png` (Claude sees pixels).
+   - The native build installs into the sim via `npx expo run:ios`.
+   - After JS edits, force the sim to refetch the bundle: `xcrun simctl terminate booted com.goodfriends.app && xcrun simctl launch booted com.goodfriends.app`.
+
+2. **Expo for web** via Claude Preview MCP (`expo-web` config in `.claude/launch.json`).
+   - `mcp__Claude_Preview__preview_start({ name: 'expo-web' })` → `preview_resize({ preset: 'mobile' })` → `preview_screenshot`.
+   - Good for layout, typography, color tokens.
+   - **NOT trustworthy** for translucency, `shadow*` props, or `Pressable` behavior — `react-native-web` re-implements these differently than native iOS.
+   - Hot pink debugging trick: temporarily set `backgroundColor: '#FF00FF'` to confirm a style is actually being applied at all (#19 used this).
+
+3. **Physical iPhone** (last resort — slow loop, requires the user).
+   - `npx expo start --lan` then `xcrun simctl getenv booted SIMULATOR_HOST_HOME` for the LAN URL, or generate a QR (`npx qrcode-terminal "exp://<lan-ip>:8081"`).
+   - User needs same WiFi as the Mac + Local Network permission granted to Expo Go (older sessions) or to the dev-built `Goodfriends` app.
+
+### Patterns + gotchas specific to mobile
+
+**Pressable styles must be static objects.** Never `style={({pressed}) => ({...})}` — that form silently drops `backgroundColor`, `borderColor`, and `flexDirection` on iOS RN in this SDK. Cards render flat, rows stack as columns. Use `style={{...}}`. Press feedback still fires via the native default. (Burned us in PR #19.)
+
+**Cards use solid `#FFFFFF`, not translucent.** `rgba(255,255,255,0.92)` mixes with the cream `#FFFBF5` body into ~`#fffcf6` which is invisible on iOS. Web's `glass-card` cheats with `backdrop-filter: blur(14px)` which RN has no equivalent for. Solid white + a real shadow (`shadowColor`, `shadowOffset`, `shadowOpacity`, `shadowRadius`, `elevation`) is the replacement.
+
+**Plus Jakarta Sans tops out at 800 ExtraBold.** `@expo-google-fonts/plus-jakarta-sans` does **not** ship a 900 Black variant. Importing the undefined name poisons the whole `useFonts(...)` call and the app silently falls back to system fonts everywhere. Inter ships 900 — use `Inter_900Black` if you genuinely need extra weight. Stick to `PlusJakartaSans_700Bold` and `PlusJakartaSans_800ExtraBold` for headings.
+
+**Supabase client is Platform-split** (`apps/mobile/lib/supabase.ts`):
+- **Native**: `expo-secure-store` for session persistence (Keychain on iOS).
+- **Web**: `localStorage` fallback. `expo-secure-store` has no web implementation and crashes on import if called.
+- The "value larger than 2048 bytes" SecureStore warning is **non-blocking** — JWT + refresh token fits within iOS's 4KB keychain item limit.
+
+**TopBar realtime subscription is best-effort.** The unread-badge channel + count query are both wrapped in try/catch — failures log `__DEV__` warnings instead of surfacing as red LogBox toasts. The badge stays at its last known value.
+
+**Auth gate only runs on `/`.** After sign in/up, explicitly `router.replace('/(tabs)/home')`. (PR #20.)
+
+### Build environment gotchas (one-time setup)
+
+- **CocoaPods must be ≥1.16** for `visionos` podspec compatibility (`react-native-safe-area-context.podspec` references it). `brew upgrade cocoapods` if you see "unrecognized OS visionos".
+- **UTF-8 locale required for `expo prebuild`**: `export LANG=en_US.UTF-8` in the shell first, otherwise `pod install` crashes on ASCII-8BIT encoding.
+- **`apps/mobile/ios/` is gitignored.** `app.json` is the single source of truth for native config — regenerate locally via `npx expo prebuild --platform ios --clean`.
+- **`react-native`, `react`, and `semver@^7` are hoisted to the root `package.json`** (deps + `overrides`). Without that, npm workspaces leave RN only in `apps/mobile/node_modules` and the hoisted `nativewind` / `react-native-css-interop` can't find it. `semver` needed v7 for `functions/satisfies` which `react-native-reanimated`'s worklets script imports.
+- **Metro is workspace-aware** via `apps/mobile/metro.config.js` — `watchFolders` covers the workspace root, `nodeModulesPaths` covers both local + root `node_modules`.
+
+### Component reuse
+
+`@goodfriends/shared` is the cross-platform escape hatch:
+- **Pure data + utils ✓** — sort/filter/format helpers, color tokens, RSVP/tier constants. Drop them here.
+- **UI components ✗** — `<div>` doesn't exist in RN; styles don't compose across platforms. Build mobile-native equivalents under `apps/mobile/components/`.
+- **Data fetching hooks** are good candidates for sharing once they stabilise (`useGroup`, `useUpcomingPlans`, `useRSVP`). Not yet extracted — each screen still queries Supabase directly.
+
+### Mobile-side Supabase nuances
+
+- Same project, same RLS, same RPCs as the web app. No mobile-specific schema.
+- `EXPO_PUBLIC_*` env vars are inlined at build time, fine for the anon key (already public).
+- Realtime subscriptions work but iOS WebSocket can flake during cold network — always wrap subscribe + handle the status callback.
+
+---
+
 ## Current feature set (working in production)
 
 - Email/password auth, profile w/ emoji
@@ -204,11 +378,19 @@ Defined in `src/index.css` and Tailwind config:
 - Home: unlimited upcoming events, inline sort control (urgency/date/tier)
 - Monthly AI recap on the Summary screen (Gemini 2.5 Flash, structured output, cached per `group_id × year_month`, Generate/Regenerate CTA)
 
-## On the README's "Next things to build" list
+## Roadmap
 
+**Mobile** (in priority order):
+- [ ] **Phase 3** — port `CreatePlan` (3-step wizard) and `PlanDetail` (RSVP tiles + moments feed + edit/delete sheets) to mobile. PlanDetail is the largest screen (~1700 lines on web) — split into sub-components.
+- [ ] **Phase 4** — port `Crew` (identity header + podium + race + stats).
+- [ ] **Phase 5** — Notifications screen, Summary screen, deep-link handling for `goodfriends://join/...`, push notifications via `expo-notifications`.
+- [ ] TestFlight distribution once Phase 3 ships (EAS Build).
+
+**Web + cross-platform**:
 - [ ] Group invite share UX (link generation + share sheet beyond raw `/join/:code`)
-- [ ] Push notifications (web push or Twilio/Expo bridge — WhatsApp layered on top)
+- [ ] Push notifications (web push or Expo push — WhatsApp layered on top)
 - [ ] Grace pass mechanic (one missed event doesn't break streak)
+- [ ] Extract data-fetching hooks (`useGroup`, `useUpcomingPlans`, `useRSVP`) into `@goodfriends/shared`
 
 ---
 
@@ -223,6 +405,10 @@ Defined in `src/index.css` and Tailwind config:
 7. **Realtime subscription cleanup** — every `supabase.channel(...).subscribe()` needs a matching `removeChannel` in the effect return. The channel name should include the user/plan id to avoid cross-tab collisions.
 8. **`launch.json`** has a hardcoded `/Users/alex/.nvm/...` path — it's per-machine and ideally would be `.gitignore`d. Don't commit edits to it.
 9. **Supabase project ref**: `ligemjbtjpqmrrwyiiyu`. Dashboard: https://supabase.com/dashboard/project/ligemjbtjpqmrrwyiiyu
+10. **Mobile `Pressable` styles must be static** — `style={({pressed}) => ({...})}` drops `backgroundColor`/`borderColor`/`flexDirection` on iOS in this Expo SDK. See full explanation in [Mobile app → patterns + gotchas](#mobile-app-appsmobile).
+11. **Plus Jakarta Sans only goes to 800 ExtraBold** in `@expo-google-fonts` — no 900 Black. Importing the undef name poisons `useFonts` and falls everything back to system fonts.
+12. **Web preview lies about translucency + shadows + Pressable** — `react-native-web` re-implements these. Always verify in iOS Simulator before trusting the design.
+13. **Native build setup**: CocoaPods ≥1.16 + `LANG=en_US.UTF-8` for `expo prebuild`. `apps/mobile/ios/` is gitignored.
 
 ---
 
