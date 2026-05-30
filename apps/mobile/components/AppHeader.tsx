@@ -171,9 +171,11 @@ const TINT = 'rgba(255, 251, 245, 0.85)'
 
 function GlassBlend({ topInset }: { topInset: number }) {
   const HEADER_H = topInset + 52
-  const FADE = 32
-  const STRIPS = 8
-  const stripH = FADE / STRIPS
+  // More, thinner strips over a slightly taller fade = a finer opacity ramp
+  // (smaller step between adjacent strips) so the feather reads as a smooth
+  // gradient rather than visible bands.
+  const FADE = 40
+  const STRIPS = 14
 
   // Solid region — full-strength real glass behind the header rows.
   const Solid = LIQUID ? (
@@ -194,15 +196,21 @@ function GlassBlend({ topInset }: { topInset: number }) {
           sits just below the solid region; opacity ramps 1→0 going down so
           the lens dissolves into the content with no hard cut-off line. */}
       {Array.from({ length: STRIPS }).map((_, i) => {
-        const opacity = 1 - (i + 1) / (STRIPS + 1)
-        const top = HEADER_H + i * stripH
+        // Contiguous, pixel-aligned bounds: y1 of strip i == y0 of strip i+1.
+        // No overlap (overlapping translucent glass composites glass-on-glass
+        // into a darker seam) and no gap (a gap would show a sharp un-glassed
+        // line). This pairing is what removes the banding.
+        const y0 = Math.round((i * FADE) / STRIPS)
+        const y1 = Math.round(((i + 1) * FADE) / STRIPS)
+        // Midpoint opacity sample → smooth ramp (~0.96 → ~0.04) with no
+        // full-opacity or fully-transparent strip at the ends.
+        const opacity = 1 - (i + 0.5) / STRIPS
         const stripStyle = {
           position: 'absolute' as const,
           left: 0,
           right: 0,
-          top,
-          // +0.5 overlap so sub-pixel rounding can't leave gaps.
-          height: stripH + 0.5,
+          top: HEADER_H + y0,
+          height: y1 - y0,
           opacity,
         }
         return LIQUID ? (
