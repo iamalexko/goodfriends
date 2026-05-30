@@ -16,31 +16,50 @@ export function TopBar() {
   const { profile, user } = useAuth()
   const [unread, setUnread] = useState(0)
 
-  // Subscribe to notifications so the badge stays live.
+  // Live unread badge: one count on mount + a realtime subscription that
+  // bumps the counter on INSERT. Both are wrapped because (a) the count
+  // query can fail on cold network / RLS race, and (b) the realtime
+  // websocket sometimes errors on iOS sim with a generic "TypeError:
+  // Network request failed" that bubbles to a LogBox toast we don't want.
+  // Silent failure is fine — the badge just stays at its last known value.
   useEffect(() => {
     if (!user) return
     let cancelled = false
+
     ;(async () => {
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('read', false)
-      if (!cancelled) setUnread(count || 0)
+      try {
+        const { count } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('read', false)
+        if (!cancelled) setUnread(count || 0)
+      } catch (err) {
+        if (__DEV__) console.warn('TopBar: notifications count failed', err)
+      }
     })()
 
-    const channel = supabase
-      .channel('notif-count-' + user.id)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-        () => setUnread((n) => n + 1),
-      )
-      .subscribe()
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    try {
+      channel = supabase
+        .channel('notif-count-' + user.id)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          () => setUnread((n) => n + 1),
+        )
+        .subscribe((status, err) => {
+          if (err && __DEV__) console.warn('TopBar: notifications channel error', status, err)
+        })
+    } catch (err) {
+      if (__DEV__) console.warn('TopBar: notifications subscribe threw', err)
+    }
 
     return () => {
       cancelled = true
-      supabase.removeChannel(channel)
+      if (channel) {
+        try { supabase.removeChannel(channel) } catch {}
+      }
     }
   }, [user])
 
