@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { EMOJIS } from '@goodfriends/shared'
 
 import { supabase } from '../lib/supabase'
@@ -97,6 +98,7 @@ const primaryButtonText = {
 }
 
 function Login({ onSwitch }: { onSwitch: () => void }) {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -120,8 +122,9 @@ function Login({ onSwitch }: { onSwitch: () => void }) {
       setError(signInErr.message)
       return
     }
-    // index.tsx's auth gate will redirect to /(tabs)/home as soon as
-    // AuthContext notices the new session.
+    // The auth gate at app/index.tsx only re-evaluates on `/`, not while we
+    // sit on `/auth`. Explicitly route to the tabs after a successful sign-in.
+    router.replace('/(tabs)/home' as any)
   }
 
   return (
@@ -194,6 +197,7 @@ function Login({ onSwitch }: { onSwitch: () => void }) {
 }
 
 function SignUp({ onSwitch }: { onSwitch: () => void }) {
+  const router = useRouter()
   const { fetchProfile } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -255,6 +259,7 @@ function SignUp({ onSwitch }: { onSwitch: () => void }) {
     }
     await fetchProfile?.(userId)
     setLoading(false)
+    router.replace('/(tabs)/home' as any)
   }
 
   return (
