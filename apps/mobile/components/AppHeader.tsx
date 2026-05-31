@@ -18,20 +18,23 @@ import { useAuth } from '../context/AuthContext'
 
 // Pattern 2 fixed app header.
 //
-// The wordmark + "+ Plan" pill + bell are ALWAYS visible and pinned. The
-// background crossfades on scroll between two layers:
-//   • at rest  → a SOLID cream panel matching the page, so the header is
-//     invisible and seamless with the feed (no glass edge-shadow);
-//   • scrolled → the real iOS 26 Liquid Glass (live lens).
-// See AppHeader's body for the crossfade and GlassBlend for the material.
+// The wordmark + "+ Plan" pill + bell are ALWAYS visible and pinned. The glass
+// background is always mounted; a solid cream cover on top fades out on scroll
+// to reveal it (see AppHeader body for why we animate the cover, not the
+// glass). At rest the cover hides everything so the header reads as seamless
+// cream; scrolled, the real iOS 26 Liquid Glass shows through.
 const LIQUID = isLiquidGlassAvailable()
 
 // Warm-paper page color — must match the screens' backgroundColor so the
 // at-rest header is indistinguishable from the content behind it.
 const PAGE_BG = '#FFFBF5'
 
-// Scroll distance (px) over which the solid→glass crossfade completes.
+// Scroll distance (px) over which the cover→glass crossfade completes.
 const FADE_DISTANCE = 40
+
+// Extra px the cream cover extends below the header row, so at rest it also
+// hides the glass's native bottom drop-shadow (not just the glass itself).
+const SHADOW_PAD = 28
 
 export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
   const insets = useSafeAreaInsets()
@@ -86,42 +89,38 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
     }
   }, [user])
 
-  // Two background layers crossfade on scroll:
-  //   • At rest (scrollY 0): a SOLID cream panel, fully opaque. Same color as
-  //     the page, no shadow — so the header is invisible / blends seamlessly
-  //     with the content below. (The native glass edge-shadow only appears
-  //     when the GlassView itself is visible, so hiding the glass at rest
-  //     removes the shadow.)
-  //   • Scrolled (scrollY ≥ FADE_DISTANCE): the real Liquid Glass.
-  // The two opacities are exact inverses → a clean crossfade.
-  // TEMP_PULSE_DIAG: self-pulsing opacity, independent of scroll, to test
-  // whether a GlassView can be opacity-animated at all.
-  const pulse = useSharedValue(0)
-  useEffect(() => {
-    pulse.value = withRepeat(withTiming(1, { duration: 2000 }), -1, true)
-  }, [])
-  const glassStyle = useAnimatedStyle(() => ({ opacity: pulse.value }))
-  const solidStyle = useAnimatedStyle(() => ({ opacity: 1 - pulse.value }))
+  // Reveal the glass on scroll WITHOUT animating the glass's own opacity.
+  //
+  // iOS visual-effect / Liquid Glass views don't fade cleanly via alpha
+  // (animating a UIVisualEffectView's opacity is unreliable — the blur drops
+  // out). So instead: the GlassView is ALWAYS mounted at full opacity, and a
+  // solid cream COVER sits on top of it. We animate the COVER (a plain View,
+  // which alpha-animates reliably):
+  //   • at rest (scrollY 0): cover opacity 1 → glass fully hidden, header
+  //     reads as seamless cream, and the cover (extended SHADOW_PAD below the
+  //     header) also masks the glass's native bottom drop-shadow.
+  //   • scrolled (scrollY ≥ FADE_DISTANCE): cover opacity 0 → glass revealed.
+  const coverStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, FADE_DISTANCE], [1, 0], Extrapolation.CLAMP),
+  }))
 
   const bgHeight = insets.top + APP_HEADER_ROW_HEIGHT
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]} pointerEvents="box-none">
-      {/* Solid cream panel — visible at rest, fades out on scroll. Blends with
-          the page so there's no header edge / shadow when not scrolled. */}
-      <Animated.View
-        style={[StyleSheet.absoluteFill, solidStyle]}
-        pointerEvents="none"
-      >
-        <View style={{ height: bgHeight, backgroundColor: PAGE_BG }} />
-      </Animated.View>
-
-      {/* Liquid glass — fades in on scroll. */}
-      <Animated.View
-        style={[StyleSheet.absoluteFill, glassStyle]}
-        pointerEvents="none"
-      >
+      {/* Real Liquid Glass — always mounted at full opacity, never faded. */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <GlassBlend topInset={insets.top} />
+      </View>
+
+      {/* Solid cream cover ON TOP — opaque at rest (hides the glass + masks its
+          bottom drop-shadow via SHADOW_PAD), fades out on scroll to reveal the
+          glass. Animating this plain View's opacity is reliable. */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, coverStyle]}
+        pointerEvents="none"
+      >
+        <View style={{ height: bgHeight + SHADOW_PAD, backgroundColor: PAGE_BG }} />
       </Animated.View>
 
       {/* Always-visible content row. */}
