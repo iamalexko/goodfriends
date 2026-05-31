@@ -94,12 +94,14 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
   //     removes the shadow.)
   //   • Scrolled (scrollY ≥ FADE_DISTANCE): the real Liquid Glass.
   // The two opacities are exact inverses → a clean crossfade.
-  const glassStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, FADE_DISTANCE], [0, 1], Extrapolation.CLAMP),
-  }))
-  const solidStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, FADE_DISTANCE], [1, 0], Extrapolation.CLAMP),
-  }))
+  // TEMP_PULSE_DIAG: self-pulsing opacity, independent of scroll, to test
+  // whether a GlassView can be opacity-animated at all.
+  const pulse = useSharedValue(0)
+  useEffect(() => {
+    pulse.value = withRepeat(withTiming(1, { duration: 2000 }), -1, true)
+  }, [])
+  const glassStyle = useAnimatedStyle(() => ({ opacity: pulse.value }))
+  const solidStyle = useAnimatedStyle(() => ({ opacity: 1 - pulse.value }))
 
   const bgHeight = insets.top + APP_HEADER_ROW_HEIGHT
 
