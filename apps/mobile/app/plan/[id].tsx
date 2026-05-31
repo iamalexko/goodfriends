@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
-import { CalendarBlank, Clock, MapPin } from 'phosphor-react-native'
+import { CalendarBlank, Clock, MapPin, PencilSimple, Check } from 'phosphor-react-native'
 import * as Haptics from 'expo-haptics'
+import DateTimePicker from '@react-native-community/datetimepicker'
 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -55,6 +56,23 @@ export default function PlanDetail() {
   const [myStatus, setMyStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  // Organiser: edit modal
+  const [editOpen, setEditOpen] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editDate, setEditDate] = useState<Date | null>(null)
+  const [editTime, setEditTime] = useState<Date | null>(null)
+  const [editLocation, setEditLocation] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [showEditDate, setShowEditDate] = useState(false)
+  const [showEditTime, setShowEditTime] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState('')
+
+  // Organiser: close + attendance
+  const [closeOpen, setCloseOpen] = useState(false)
+  const [attendance, setAttendance] = useState<Record<string, boolean>>({})
+  const [closing, setClosing] = useState(false)
 
   useEffect(() => {
     load()
@@ -118,6 +136,86 @@ export default function PlanDetail() {
         if (__DEV__) console.warn('PlanDetail: notify organiser failed', err)
       }
     }
+  }
+
+  // ---- Organiser: edit ----
+  function openEdit() {
+    if (!plan) return
+    setEditName(plan.name)
+    // plan.date is YYYY-MM-DD; parse as local noon to avoid TZ day-shift.
+    setEditDate(plan.date ? new Date(`${plan.date}T12:00:00`) : null)
+    // plan.time is HH:MM (24h); build a Date for the picker.
+    if (plan.time) {
+      const [h, m] = plan.time.split(':').map((n) => parseInt(n, 10))
+      const d = new Date()
+      d.setHours(h || 0, m || 0, 0, 0)
+      setEditTime(d)
+    } else {
+      setEditTime(null)
+    }
+    setEditLocation(plan.location || '')
+    setEditNotes(plan.notes || '')
+    setEditError('')
+    setShowEditDate(false)
+    setShowEditTime(false)
+    setEditOpen(true)
+  }
+
+  async function saveEdits() {
+    if (!plan) return
+    if (!editName.trim() || !editDate) { setEditError('Add a name and date'); return }
+    setSavingEdit(true)
+    setEditError('')
+    const y = editDate.getFullYear()
+    const mo = String(editDate.getMonth() + 1).padStart(2, '0')
+    const da = String(editDate.getDate()).padStart(2, '0')
+    const dateStr = `${y}-${mo}-${da}`
+    const timeStr = editTime
+      ? `${String(editTime.getHours()).padStart(2, '0')}:${String(editTime.getMinutes()).padStart(2, '0')}`
+      : null
+    const { error } = await supabase
+      .from('plans')
+      .update({
+        name: editName.trim(),
+        date: dateStr,
+        time: timeStr,
+        location: editLocation.trim() || null,
+        notes: editNotes.trim() || null,
+      })
+      .eq('id', plan.id)
+    setSavingEdit(false)
+    if (error) { setEditError(error.message); return }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    setEditOpen(false)
+    load()
+  }
+
+  // ---- Organiser: close + attendance ----
+  function openClose() {
+    // Default everyone who said "in" to present; everyone else unchecked.
+    const init: Record<string, boolean> = {}
+    rsvps.forEach((r) => { init[r.user_id] = r.status === 'in' })
+    setAttendance(init)
+    setCloseOpen(true)
+  }
+
+  async function closeEvent() {
+    if (!plan || closing) return
+    setClosing(true)
+    const rows = Object.entries(attendance).map(([userId, came]) => ({
+      plan_id: plan.id, user_id: userId, came,
+    }))
+    if (rows.length) {
+      await supabase.from('attendances').upsert(rows, { onConflict: 'plan_id,user_id' })
+    }
+    await supabase.from('plans').update({ status: 'closed' }).eq('id', plan.id)
+    // Server-side RPCs own the points/score maths so web + mobile stay in sync.
+    try { await supabase.rpc('award_points_for_plan', { p_plan_id: plan.id }) } catch (e) { if (__DEV__) console.warn('award_points_for_plan', e) }
+    try { await supabase.rpc('recalculate_group_scores', { p_group_id: plan.group_id }) } catch (e) { if (__DEV__) console.warn('recalculate_group_scores', e) }
+    setClosing(false)
+    setCloseOpen(false)
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    load()
   }
 
   function goBack() {
@@ -270,18 +368,134 @@ export default function PlanDetail() {
             ))
           )}
         </View>
+
+        {/* Organiser: close the plan (open plans only) */}
+        {isOrganiser && !isClosed && (
+          <Pressable
+            onPress={openClose}
+            style={{
+              marginTop: 28,
+              backgroundColor: '#111111',
+              borderRadius: 999,
+              paddingVertical: 16,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+              Close plan & mark attendance
+            </Text>
+          </Pressable>
+        )}
       </ScrollView>
+
+      {/* ---- Edit modal ---- */}
+      <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => !savingEdit && setEditOpen(false)}>
+        <Pressable onPress={() => !savingEdit && setEditOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '90%' }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 16 }} />
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', marginBottom: 14 }}>Edit plan</Text>
+
+              <Text style={FIELD_LABEL}>Plan name</Text>
+              <TextInput style={FIELD_INPUT} value={editName} onChangeText={setEditName} placeholder="Plan name" placeholderTextColor="#BBBBBB" maxLength={50} />
+
+              <Text style={FIELD_LABEL}>Date</Text>
+              <Pressable onPress={() => { setShowEditTime(false); setShowEditDate((s) => !s) }} style={FIELD_INPUT as any}>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_500Medium', color: editDate ? '#111111' : '#BBBBBB' }}>
+                  {editDate ? editDate.toLocaleDateString('en-AE', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Pick a date'}
+                </Text>
+              </Pressable>
+              {showEditDate && (
+                <DateTimePicker
+                  value={editDate || new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                  onChange={(e, d) => { if (Platform.OS !== 'ios') setShowEditDate(false); if (e.type === 'set' && d) setEditDate(d) }}
+                />
+              )}
+
+              <Text style={FIELD_LABEL}>Time</Text>
+              <Pressable onPress={() => { setShowEditDate(false); setShowEditTime((s) => !s) }} style={FIELD_INPUT as any}>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_500Medium', color: editTime ? '#111111' : '#BBBBBB' }}>
+                  {editTime ? editTime.toLocaleTimeString('en-AE', { hour: 'numeric', minute: '2-digit' }) : 'Add a time (optional)'}
+                </Text>
+              </Pressable>
+              {showEditTime && (
+                <DateTimePicker
+                  value={editTime || new Date()}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(e, d) => { if (Platform.OS !== 'ios') setShowEditTime(false); if (e.type === 'set' && d) setEditTime(d) }}
+                />
+              )}
+
+              <Text style={FIELD_LABEL}>Location</Text>
+              <TextInput style={FIELD_INPUT} value={editLocation} onChangeText={setEditLocation} placeholder="Venue or area" placeholderTextColor="#BBBBBB" />
+
+              <Text style={FIELD_LABEL}>Notes</Text>
+              <TextInput style={FIELD_INPUT} value={editNotes} onChangeText={setEditNotes} placeholder="Optional" placeholderTextColor="#BBBBBB" />
+
+              {editError ? <Text style={{ color: '#EF4444', fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 4 }}>{editError}</Text> : null}
+
+              <Pressable onPress={saveEdits} disabled={savingEdit} style={{ marginTop: 16, backgroundColor: '#111111', borderRadius: 999, paddingVertical: 15, alignItems: 'center', opacity: savingEdit ? 0.5 : 1 }}>
+                <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>{savingEdit ? 'Saving…' : 'Save changes'}</Text>
+              </Pressable>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ---- Close + attendance modal ---- */}
+      <Modal visible={closeOpen} transparent animationType="slide" onRequestClose={() => !closing && setCloseOpen(false)}>
+        <Pressable onPress={() => !closing && setCloseOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '90%' }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 16 }} />
+            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', marginBottom: 4 }}>Who showed up?</Text>
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', marginBottom: 14 }}>Tick everyone who came. Closing awards points and updates scores.</Text>
+            <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
+              {sortedRsvps.map((r) => {
+                const came = !!attendance[r.user_id]
+                return (
+                  <Pressable
+                    key={r.user_id}
+                    onPress={() => setAttendance((p) => ({ ...p, [r.user_id]: !p[r.user_id] }))}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' }}
+                  >
+                    <EmojiAvatar emoji={r.profiles?.emoji || '😎'} size="sm" />
+                    <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#111111' }}>{r.profiles?.display_name || 'Someone'}</Text>
+                    <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: came ? '#34D399' : 'transparent', borderColor: came ? '#34D399' : '#DDDDDD' }}>
+                      {came && <Check size={14} weight="bold" color="#FFFFFF" />}
+                    </View>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
+            <Pressable onPress={closeEvent} disabled={closing} style={{ marginTop: 16, backgroundColor: '#111111', borderRadius: 999, paddingVertical: 15, alignItems: 'center', opacity: closing ? 0.5 : 1 }}>
+              <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>{closing ? 'Closing…' : 'Close plan'}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   )
 }
 
-function Header({ onBack }: { onBack: () => void }) {
+function Header({ onBack, onEdit }: { onBack: () => void; onEdit?: () => void }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}>
       <BackButton onPress={onBack} />
-      <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', letterSpacing: -0.3 }}>
+      <Text style={{ flex: 1, fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', letterSpacing: -0.3 }}>
         Plan
       </Text>
+      {onEdit && (
+        <Pressable
+          onPress={onEdit}
+          hitSlop={8}
+          style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <PencilSimple size={16} weight="bold" color="#111111" />
+        </Pressable>
+      )}
     </View>
   )
 }
