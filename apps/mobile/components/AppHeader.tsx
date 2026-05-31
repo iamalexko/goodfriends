@@ -4,12 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Plus, Bell } from 'phosphor-react-native'
 import * as Haptics from 'expo-haptics'
-import Animated, {
-  useAnimatedStyle,
-  interpolate,
-  Extrapolation,
-  SharedValue,
-} from 'react-native-reanimated'
+import type { SharedValue } from 'react-native-reanimated'
 import { BlurView } from 'expo-blur'
 
 import { supabase } from '../lib/supabase'
@@ -17,27 +12,19 @@ import { useAuth } from '../context/AuthContext'
 
 // Pattern 2 fixed app header.
 //
-// The wordmark + "+ Plan" pill + bell are ALWAYS visible and pinned. The
-// background is a frosted-glass BlurView that fades in on scroll:
-//   • at rest (scrollY 0): the blur is fully transparent, so the header reads
-//     as seamless cream with the feed behind it (no edge, no shadow);
-//   • scrolled (scrollY ≥ FADE_DISTANCE): the blur is fully opaque, frosting
-//     the content that scrolls underneath.
+// The wordmark + "+ Plan" pill + bell are ALWAYS visible and pinned, over a
+// frosted-glass BlurView background that is ALSO always visible.
 //
-// We use expo-blur's BlurView (not iOS 26 GlassView) on purpose: a BlurView's
-// effect alpha-animates reliably, so the scroll crossfade actually works.
-// GlassView's native lens does not fade via opacity, which made the crossfade
-// invisible.
-const AnimatedBlurView = Animated.createAnimatedComponent(BlurView)
-
-// Scroll distance (px) over which the blur fades in.
-const FADE_DISTANCE = 40
-
-// Blur strength once fully revealed. ~85 reads as a clear frosted panel over
-// the warm-paper content without going fully opaque.
+// We use expo-blur's BlurView (not iOS 26 GlassView): the native Liquid Glass
+// lens can't be opacity-animated and drew its own drop-shadow. A BlurView has
+// no drop-shadow, so there's no reason to hide it at rest — it's simply always
+// on. That removes all the scroll-driven opacity plumbing (and its fragility).
+//
+// `scrollY` is accepted but unused (screens still pass it); kept so a
+// scroll-driven effect can be reintroduced later without touching callers.
 const BLUR_INTENSITY = 85
 
-export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
+export function AppHeader({ scrollY: _scrollY }: { scrollY?: SharedValue<number> }) {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { user } = useAuth()
@@ -90,20 +77,15 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
     }
   }, [user])
 
-  // Frosted-glass background fades in over the first FADE_DISTANCE px of scroll.
-  const blurStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, FADE_DISTANCE], [0, 1], Extrapolation.CLAMP),
-  }))
-
   const bgHeight = insets.top + APP_HEADER_ROW_HEIGHT
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]} pointerEvents="box-none">
-      {/* Frosted-glass background — fades in on scroll. */}
-      <AnimatedBlurView
+      {/* Frosted-glass background — always visible. */}
+      <BlurView
         intensity={BLUR_INTENSITY}
         tint="light"
-        style={[styles.blur, { height: bgHeight }, blurStyle]}
+        style={[styles.blur, { height: bgHeight }]}
         pointerEvents="none"
       />
 
