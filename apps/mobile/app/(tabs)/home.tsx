@@ -328,8 +328,7 @@ export default function Home() {
               <PlanCard
                 key={plan.id}
                 plan={plan}
-                // TODO: route to /plan/[id] when the detail screen ships in Phase 3
-                onPress={undefined}
+                onPress={() => router.push(`/plan/${plan.id}` as any)}
               />
             ))
           )}
@@ -352,7 +351,7 @@ export default function Home() {
               {pastPlans.map((p) => (
                 <Pressable
                   key={p.id}
-                  // TODO: route to plan detail
+                  onPress={() => router.push(`/plan/${p.id}` as any)}
                   // Static style — Pressable style-as-function drops styles
                   // on iOS RN in this Expo SDK. Press feedback comes via
                   // android_ripple / native default.
