@@ -1,21 +1,16 @@
 {
-  "name": "goodfriends",
+  "name": "goodfriends-monorepo",
   "private": true,
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
+  "//": "Root scripts proxy to the web workspace so Vercel (and humans) can build without cd-ing.",
   "scripts": {
-    "web": "npm run dev -w @goodfriends/web",
-    "web:build": "npm run build -w @goodfriends/web",
-    "mobile": "cd apps/mobile && npx expo start"
-  },
-  "dependencies": {
-    "react": "19.1.0",
-    "react-native": "0.81.5",
-    "semver": "^7.6.0"
-  },
-  "overrides": {
-    "semver": "^7.6.0"
+    "web:dev": "npm run dev --workspace @goodfriends/web",
+    "web:build": "npm run build --workspace @goodfriends/web",
+    "web:preview": "npm run preview --workspace @goodfriends/web",
+    "dev": "npm run web:dev",
+    "build": "npm run web:build"
   }
 }
