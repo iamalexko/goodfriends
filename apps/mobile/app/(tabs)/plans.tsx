@@ -212,8 +212,7 @@ export default function Plans() {
                 key={plan.id}
                 plan={plan}
                 variant="plans"
-                // TODO: route to /plan/[id] in Phase 3
-                onPress={undefined}
+                onPress={() => router.push(`/plan/${plan.id}` as any)}
               />
             ))
           )}
