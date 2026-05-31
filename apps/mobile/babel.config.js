@@ -1,7 +1,10 @@
 // NativeWind v4 + Reanimated.
 //   - jsxImportSource: routes `className` props through NativeWind's runtime
 //   - `nativewind/babel` is the compiler that turns Tailwind classes into styles
-//   - react-native-reanimated/plugin must be last per Reanimated docs
+//   - Reanimated 4 uses the WORKLETS plugin (react-native-worklets/plugin),
+//     NOT the old react-native-reanimated/plugin. With the old one, worklets
+//     (useAnimatedScrollHandler / useAnimatedStyle) silently no-op — which is
+//     why scroll-driven animations did nothing. Must be last.
 module.exports = function (api) {
   api.cache(true)
   return {
@@ -9,6 +12,6 @@ module.exports = function (api) {
       ['babel-preset-expo', { jsxImportSource: 'nativewind' }],
       'nativewind/babel',
     ],
-    plugins: ['react-native-reanimated/plugin'],
+    plugins: ['react-native-worklets/plugin'],
   }
 }
