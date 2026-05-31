@@ -34,6 +34,7 @@ type Profile = { id: string; display_name: string; emoji: string | null }
 type Rsvp = { user_id: string; status: string | null; profiles: Profile | null }
 type PlanRow = {
   id: string
+  group_id: string
   name: string
   date: string
   time: string | null
@@ -114,7 +115,7 @@ export default function PlanDetail() {
     setRsvps((prev) => {
       const idx = prev.findIndex((r) => r.user_id === user.id)
       if (idx === -1) {
-        return [...prev, { user_id: user.id, status, profiles: profile ? { id: user.id, display_name: profile.display_name, emoji: profile.emoji } : null }]
+        return [...prev, { user_id: user.id, status, profiles: profile ? { id: user.id, display_name: profile.display_name || 'You', emoji: profile.emoji ?? null } : null }]
       }
       const next = [...prev]
       next[idx] = { ...next[idx], status }
@@ -247,6 +248,7 @@ export default function PlanDetail() {
   }
 
   const isClosed = plan.status !== 'open'
+  const isOrganiser = !!user && plan.organiser_id === user.id
   // Attendees sorted: "in" first, then likely, then no, then undecided.
   const order: Record<string, number> = { in: 0, likely: 1, no: 2 }
   const sortedRsvps = [...rsvps].sort(
@@ -255,7 +257,7 @@ export default function PlanDetail() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFBF5', paddingTop: insets.top }}>
-      <Header onBack={goBack} />
+      <Header onBack={goBack} onEdit={isOrganiser && !isClosed ? openEdit : undefined} />
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Math.max(40, insets.bottom + 24) }}>
         {/* Title + tier */}
@@ -517,4 +519,27 @@ const SECTION_LABEL = {
   textTransform: 'uppercase' as const,
   color: '#BBBBBB',
   marginBottom: 12,
+}
+
+const FIELD_LABEL = {
+  fontFamily: 'Inter_700Bold' as const,
+  fontSize: 10,
+  fontWeight: '700' as const,
+  letterSpacing: 0.8,
+  textTransform: 'uppercase' as const,
+  color: '#AAAAAA',
+  marginBottom: 6,
+}
+
+const FIELD_INPUT = {
+  paddingHorizontal: 16,
+  paddingVertical: 14,
+  borderRadius: 16,
+  borderWidth: 1,
+  borderColor: 'rgba(0,0,0,0.1)',
+  backgroundColor: 'rgba(255,255,255,0.8)',
+  fontSize: 14,
+  fontFamily: 'Inter_500Medium' as const,
+  color: '#111111',
+  marginBottom: 14,
 }
