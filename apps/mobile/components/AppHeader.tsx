@@ -10,7 +10,6 @@ import Animated, {
   Extrapolation,
   SharedValue,
 } from 'react-native-reanimated'
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { BlurView } from 'expo-blur'
 
 import { supabase } from '../lib/supabase'
@@ -18,23 +17,25 @@ import { useAuth } from '../context/AuthContext'
 
 // Pattern 2 fixed app header.
 //
-// The wordmark + "+ Plan" pill + bell are ALWAYS visible and pinned. The glass
-// background is always mounted; a solid cream cover on top fades out on scroll
-// to reveal it (see AppHeader body for why we animate the cover, not the
-// glass). At rest the cover hides everything so the header reads as seamless
-// cream; scrolled, the real iOS 26 Liquid Glass shows through.
-const LIQUID = isLiquidGlassAvailable()
+// The wordmark + "+ Plan" pill + bell are ALWAYS visible and pinned. The
+// background is a frosted-glass BlurView that fades in on scroll:
+//   • at rest (scrollY 0): the blur is fully transparent, so the header reads
+//     as seamless cream with the feed behind it (no edge, no shadow);
+//   • scrolled (scrollY ≥ FADE_DISTANCE): the blur is fully opaque, frosting
+//     the content that scrolls underneath.
+//
+// We use expo-blur's BlurView (not iOS 26 GlassView) on purpose: a BlurView's
+// effect alpha-animates reliably, so the scroll crossfade actually works.
+// GlassView's native lens does not fade via opacity, which made the crossfade
+// invisible.
+const AnimatedBlurView = Animated.createAnimatedComponent(BlurView)
 
-// Warm-paper page color — must match the screens' backgroundColor so the
-// at-rest header is indistinguishable from the content behind it.
-const PAGE_BG = '#FFFBF5'
-
-// Scroll distance (px) over which the cover→glass crossfade completes.
+// Scroll distance (px) over which the blur fades in.
 const FADE_DISTANCE = 40
 
-// Extra px the cream cover extends below the header row, so at rest it also
-// hides the glass's native bottom drop-shadow (not just the glass itself).
-const SHADOW_PAD = 28
+// Blur strength once fully revealed. ~85 reads as a clear frosted panel over
+// the warm-paper content without going fully opaque.
+const BLUR_INTENSITY = 85
 
 export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
   const insets = useSafeAreaInsets()
@@ -89,39 +90,22 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
     }
   }, [user])
 
-  // Reveal the glass on scroll WITHOUT animating the glass's own opacity.
-  //
-  // iOS visual-effect / Liquid Glass views don't fade cleanly via alpha
-  // (animating a UIVisualEffectView's opacity is unreliable — the blur drops
-  // out). So instead: the GlassView is ALWAYS mounted at full opacity, and a
-  // solid cream COVER sits on top of it. We animate the COVER (a plain View,
-  // which alpha-animates reliably):
-  //   • at rest (scrollY 0): cover opacity 1 → glass fully hidden, header
-  //     reads as seamless cream, and the cover (extended SHADOW_PAD below the
-  //     header) also masks the glass's native bottom drop-shadow.
-  //   • scrolled (scrollY ≥ FADE_DISTANCE): cover opacity 0 → glass revealed.
-  const coverStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, FADE_DISTANCE], [1, 0], Extrapolation.CLAMP),
+  // Frosted-glass background fades in over the first FADE_DISTANCE px of scroll.
+  const blurStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, FADE_DISTANCE], [0, 1], Extrapolation.CLAMP),
   }))
 
   const bgHeight = insets.top + APP_HEADER_ROW_HEIGHT
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]} pointerEvents="box-none">
-      {/* Real Liquid Glass — always mounted at full opacity, never faded. */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <GlassBlend topInset={insets.top} />
-      </View>
-
-      {/* Solid cream cover ON TOP — opaque at rest (hides the glass + masks its
-          bottom drop-shadow via SHADOW_PAD), fades out on scroll to reveal the
-          glass. Animating this plain View's opacity is reliable. */}
-      <Animated.View
-        style={[StyleSheet.absoluteFill, coverStyle]}
+      {/* Frosted-glass background — fades in on scroll. */}
+      <AnimatedBlurView
+        intensity={BLUR_INTENSITY}
+        tint="light"
+        style={[styles.blur, { height: bgHeight }, blurStyle]}
         pointerEvents="none"
-      >
-        <View style={{ height: bgHeight + SHADOW_PAD, backgroundColor: PAGE_BG }} />
-      </Animated.View>
+      />
 
       {/* Always-visible content row. */}
       <View style={styles.row}>
@@ -160,44 +144,6 @@ export function AppHeader({ scrollY }: { scrollY: SharedValue<number> }) {
   )
 }
 
-// Visibility knobs — `regular` glass over the warm-paper background is subtle
-// (the lens has little tonal contrast to refract), so a warm tint biased
-// toward the page color gives it presence. 0.85 is intentionally strong: it
-// reads as a clear warm-frost panel while the underlying GlassView still
-// refracts content beneath (verified on iOS 26 — the title that scrolls under
-// the header blurs). Lower toward ~0.5 for a more transparent, airier look;
-// raise toward 1.0 for a near-solid bar.
-//
-// NB: GlassView's native tint only re-applies on a FULL app reload, not Fast
-// Refresh — if a tint tweak looks like a no-op, relaunch the app.
-const GLASS_STYLE = 'regular' as const
-// Lower tint (0.3) so the SCROLLED glass state is visually distinct from the
-// at-rest solid cream panel — otherwise we'd be crossfading cream→cream and
-// the transition would be imperceptible. At this tint the lens reads as real
-// glass (content/cards show through, frosted) rather than a flat color.
-const TINT = 'rgba(255, 251, 245, 0.3)'
-
-// The glass background — a single real iOS 26 GlassView (live lens /
-// refraction) the full height of the header, with a clean straight bottom
-// edge. No feather.
-//
-// REQUIREMENT: the background MUST be a real `GlassView`, not a BlurView and
-// not a tinted-paper approximation. (iOS < 26 / Android: GlassView isn't
-// available, so it falls back to a BlurView.)
-function GlassBlend({ topInset }: { topInset: number }) {
-  const HEADER_H = topInset + 52
-
-  return LIQUID ? (
-    <GlassView
-      style={{ height: HEADER_H }}
-      glassEffectStyle={GLASS_STYLE}
-      tintColor={TINT}
-    />
-  ) : (
-    <BlurView intensity={90} tint="light" style={{ height: HEADER_H }} />
-  )
-}
-
 // Header height is `safeAreaTop + 52` (the row). Screens should leave at
 // least that much top padding on the first ScrollView so content doesn't
 // start under the wordmark at rest. Exported for use in screens — keeps
@@ -211,6 +157,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 100,
+  },
+  blur: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   row: {
     flexDirection: 'row',
