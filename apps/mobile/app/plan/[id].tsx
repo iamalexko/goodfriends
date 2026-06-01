@@ -32,6 +32,12 @@ function formatPlanDate(dateStr?: string | null) {
 
 type Profile = { id: string; display_name: string; emoji: string | null }
 type Rsvp = { user_id: string; status: string | null; profiles: Profile | null }
+type InviteRequest = {
+  id: string
+  requester_id: string
+  status: 'pending' | 'approved' | 'rejected'
+  requester?: { id: string; display_name: string; emoji: string | null } | null
+}
 type PlanRow = {
   id: string
   group_id: string
@@ -75,6 +81,19 @@ export default function PlanDetail() {
   const [attendance, setAttendance] = useState<Record<string, boolean>>({})
   const [closing, setClosing] = useState(false)
 
+  // Organiser: delete
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  // Nudges (organiser pokes undecided members)
+  const [nudges, setNudges] = useState<{ nudgee_id: string; created_at: string }[]>([])
+  const [nudging, setNudging] = useState<string | null>(null)
+
+  // Invite requests
+  const [inviteRequests, setInviteRequests] = useState<InviteRequest[]>([])
+  const [myInviteRequest, setMyInviteRequest] = useState<InviteRequest | null>(null)
+  const [requestBusy, setRequestBusy] = useState(false)
+
   useEffect(() => {
     load()
   }, [id])
@@ -97,6 +116,32 @@ export default function PlanDetail() {
     setRsvps((rsvpData || []) as Rsvp[])
     const mine = (rsvpData || []).find((r: any) => r.user_id === user?.id)
     setMyStatus(mine?.status ?? null)
+
+    const organiserId = (planData as PlanRow).organiser_id
+    const amOrganiser = !!user && organiserId === user.id
+
+    // Nudges I've sent on this plan (organiser only) — drives 24h cooldown UI.
+    if (amOrganiser && user) {
+      const { data: nudgeData } = await supabase
+        .from('nudges')
+        .select('nudgee_id, created_at')
+        .eq('plan_id', id)
+        .eq('nudger_id', user.id)
+      setNudges((nudgeData || []) as any)
+    }
+
+    // Invite requests: organiser sees all; a non-invited member sees only theirs.
+    if (user) {
+      let q = supabase
+        .from('event_invite_requests')
+        .select('*, requester:requester_id(id, display_name, emoji)')
+        .eq('plan_id', id)
+      if (!amOrganiser) q = q.eq('requester_id', user.id)
+      const { data: reqData } = await q.order('created_at', { ascending: true })
+      setInviteRequests((reqData || []) as InviteRequest[])
+      setMyInviteRequest(((reqData || []) as InviteRequest[]).find((r) => r.requester_id === user.id) || null)
+    }
+
     setLoading(false)
   }
 
@@ -219,6 +264,136 @@ export default function PlanDetail() {
     load()
   }
 
+  // ---- Organiser: delete ----
+  async function deletePlan() {
+    if (!plan || deleting) return
+    setDeleting(true)
+    // Notify invitees only when cancelling an OPEN plan (deleting a closed
+    // plan is record-cleanup). plan_id null — the row is about to be deleted.
+    if (plan.status === 'open') {
+      for (const r of rsvps) {
+        if (r.user_id === user?.id) continue
+        try {
+          await supabase.rpc('create_notification', {
+            p_user_id: r.user_id,
+            p_type: 'event_cancelled',
+            p_title: 'Plan cancelled ❌',
+            p_body: `${profile?.display_name || 'The organiser'} cancelled ${plan.name}`,
+            p_plan_id: null,
+            p_actor_id: user?.id,
+          })
+        } catch (e) { if (__DEV__) console.warn('cancel notify', e) }
+      }
+    }
+    // Child rows first (explicit, so RLS errors surface), then the plan.
+    await supabase.from('rsvps').delete().eq('plan_id', plan.id)
+    await supabase.from('attendances').delete().eq('plan_id', plan.id)
+    await supabase.from('event_invite_requests').delete().eq('plan_id', plan.id)
+    const { error } = await supabase.from('plans').delete().eq('id', plan.id)
+    setDeleting(false)
+    if (error) { if (__DEV__) console.warn('deletePlan', error); return }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    setDeleteOpen(false)
+    router.replace('/(tabs)/plans' as any)
+  }
+
+  // ---- Nudges ----
+  function canNudge(userId: string) {
+    const existing = nudges.find((n) => n.nudgee_id === userId)
+    if (!existing) return true
+    return (Date.now() - new Date(existing.created_at).getTime()) / 3600000 >= 24
+  }
+
+  async function nudgeMember(targetUserId: string) {
+    if (!user || !plan || nudging) return
+    setNudging(targetUserId)
+    // Delete + reinsert so unique(plan_id,nudger_id,nudgee_id) doesn't block a
+    // re-nudge after the 24h cooldown.
+    await supabase.from('nudges').delete()
+      .eq('plan_id', plan.id).eq('nudger_id', user.id).eq('nudgee_id', targetUserId)
+    const { error } = await supabase.from('nudges').insert({
+      plan_id: plan.id, nudger_id: user.id, nudgee_id: targetUserId,
+    })
+    if (error) { if (__DEV__) console.warn('nudge insert', error); setNudging(null); return }
+    try {
+      await supabase.rpc('create_notification', {
+        p_user_id: targetUserId,
+        p_type: 'event_invite',
+        p_title: `${profile?.display_name || 'Someone'} poked you 👈`,
+        p_body: `Are you in for ${plan.name} or not? 👀`,
+        p_plan_id: plan.id,
+        p_actor_id: user.id,
+      })
+    } catch (e) { if (__DEV__) console.warn('nudge notify', e) }
+    setNudges((prev) => [
+      ...prev.filter((n) => n.nudgee_id !== targetUserId),
+      { nudgee_id: targetUserId, created_at: new Date().toISOString() },
+    ])
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
+    setNudging(null)
+  }
+
+  // ---- Invite requests ----
+  async function requestInvite() {
+    if (!user || !plan || requestBusy || myInviteRequest?.status === 'pending') return
+    setRequestBusy(true)
+    const { data, error } = await supabase
+      .from('event_invite_requests')
+      .upsert(
+        { plan_id: plan.id, requester_id: user.id, status: 'pending', decided_by: null, decided_at: null },
+        { onConflict: 'plan_id,requester_id' },
+      )
+      .select('*, requester:requester_id(id, display_name, emoji)')
+      .single()
+    if (error || !data) { setRequestBusy(false); if (__DEV__) console.warn('requestInvite', error); return }
+    setMyInviteRequest(data as InviteRequest)
+    setInviteRequests((prev) => [data as InviteRequest, ...prev.filter((r) => r.id !== (data as any).id)])
+    try {
+      await supabase.rpc('create_notification', {
+        p_user_id: plan.organiser_id,
+        p_type: 'event_invite_request',
+        p_title: 'Invite request',
+        p_body: `${profile?.display_name || 'Someone'} asked to join ${plan.name}`,
+        p_plan_id: plan.id,
+        p_actor_id: user.id,
+      })
+    } catch (e) { if (__DEV__) console.warn('request notify', e) }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    setRequestBusy(false)
+  }
+
+  async function decideInviteRequest(request: InviteRequest, status: 'approved' | 'rejected') {
+    if (!user || !plan || requestBusy) return
+    setRequestBusy(true)
+    if (status === 'approved') {
+      const { error } = await supabase.from('rsvps').upsert(
+        { plan_id: plan.id, user_id: request.requester_id, status: null },
+        { onConflict: 'plan_id,user_id', ignoreDuplicates: true },
+      )
+      if (error) { setRequestBusy(false); if (__DEV__) console.warn('approve rsvp', error); return }
+    }
+    const { error } = await supabase
+      .from('event_invite_requests')
+      .update({ status, decided_by: user.id, decided_at: new Date().toISOString() })
+      .eq('id', request.id)
+    if (error) { setRequestBusy(false); if (__DEV__) console.warn('decide update', error); return }
+    try {
+      await supabase.rpc('create_notification', {
+        p_user_id: request.requester_id,
+        p_type: status === 'approved' ? 'event_request_approved' : 'event_request_rejected',
+        p_title: status === 'approved' ? 'You were invited' : 'Request declined',
+        p_body: status === 'approved'
+          ? `${profile?.display_name || 'The planner'} added you to ${plan.name}`
+          : `${profile?.display_name || 'The planner'} declined your request for ${plan.name}`,
+        p_plan_id: status === 'approved' ? plan.id : null,
+        p_actor_id: user.id,
+      })
+    } catch (e) { if (__DEV__) console.warn('decide notify', e) }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    setRequestBusy(false)
+    load()
+  }
+
   function goBack() {
     if (router.canGoBack()) router.back()
     else router.replace('/(tabs)/home' as any)
@@ -249,6 +424,10 @@ export default function PlanDetail() {
 
   const isClosed = plan.status !== 'open'
   const isOrganiser = !!user && plan.organiser_id === user.id
+  // A signed-in non-organiser who isn't in the RSVP list can request an invite.
+  const isInvited = !!user && rsvps.some((r) => r.user_id === user.id)
+  const canRequestInvite = !!user && !isOrganiser && !isInvited && !isClosed
+  const pendingRequests = inviteRequests.filter((r) => r.status === 'pending')
   // Attendees sorted: "in" first, then likely, then no, then undecided.
   const order: Record<string, number> = { in: 0, likely: 1, no: 2 }
   const sortedRsvps = [...rsvps].sort(
@@ -363,6 +542,22 @@ export default function PlanDetail() {
                 </Text>
                 {r.status ? (
                   <Pill variant={RSVP_PILL[r.status] || 'neutral'}>{RSVP_LABEL[r.status] || r.status}</Pill>
+                ) : isOrganiser && !isClosed && r.user_id !== user?.id ? (
+                  <Pressable
+                    onPress={() => canNudge(r.user_id) && nudgeMember(r.user_id)}
+                    disabled={!canNudge(r.user_id) || nudging === r.user_id}
+                    hitSlop={6}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 999,
+                      backgroundColor: canNudge(r.user_id) ? '#FEF3C7' : '#F3F4F6',
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, fontWeight: '700', color: canNudge(r.user_id) ? '#92400E' : '#BBBBBB' }}>
+                      {nudging === r.user_id ? 'Poking…' : canNudge(r.user_id) ? '👈 Nudge' : 'Nudged'}
+                    </Text>
+                  </Pressable>
                 ) : (
                   <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: '#CCCCCC' }}>no reply</Text>
                 )}
@@ -370,6 +565,65 @@ export default function PlanDetail() {
             ))
           )}
         </View>
+
+        {/* Invite requests — organiser approves/rejects pending ones */}
+        {isOrganiser && pendingRequests.length > 0 && (
+          <View style={{ marginTop: 28 }}>
+            <Text style={SECTION_LABEL}>Requests to join · {pendingRequests.length}</Text>
+            {pendingRequests.map((req) => (
+              <View
+                key={req.id}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' }}
+              >
+                <EmojiAvatar emoji={req.requester?.emoji || '😎'} size="sm" />
+                <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#111111' }}>
+                  {req.requester?.display_name || 'Someone'}
+                </Text>
+                <Pressable
+                  onPress={() => decideInviteRequest(req, 'rejected')}
+                  disabled={requestBusy}
+                  hitSlop={4}
+                  style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#F3F4F6', marginRight: 6 }}
+                >
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#6B7280' }}>Decline</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => decideInviteRequest(req, 'approved')}
+                  disabled={requestBusy}
+                  hitSlop={4}
+                  style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#111111' }}
+                >
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>Approve</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Non-invited member: request to join */}
+        {canRequestInvite && (
+          <View style={{ marginTop: 28 }}>
+            {myInviteRequest?.status === 'pending' ? (
+              <View style={{ backgroundColor: '#FEF3C7', borderRadius: 16, paddingVertical: 14, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, fontWeight: '700', color: '#92400E' }}>Request sent — waiting on the host</Text>
+              </View>
+            ) : myInviteRequest?.status === 'rejected' ? (
+              <View style={{ backgroundColor: '#FEF2F2', borderRadius: 16, paddingVertical: 14, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, fontWeight: '700', color: '#B91C1C' }}>Your request was declined</Text>
+              </View>
+            ) : (
+              <Pressable
+                onPress={requestInvite}
+                disabled={requestBusy}
+                style={{ backgroundColor: '#111111', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: requestBusy ? 0.5 : 1 }}
+              >
+                <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+                  {requestBusy ? 'Sending…' : 'Ask to join'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        )}
 
         {/* Organiser: close the plan (open plans only) */}
         {isOrganiser && !isClosed && (
@@ -385,6 +639,15 @@ export default function PlanDetail() {
           >
             <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
               Close plan & mark attendance
+            </Text>
+          </Pressable>
+        )}
+
+        {/* Organiser: delete / cancel */}
+        {isOrganiser && (
+          <Pressable onPress={() => setDeleteOpen(true)} style={{ marginTop: 12, paddingVertical: 14, alignItems: 'center' }}>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, fontWeight: '700', color: '#B91C1C' }}>
+              {isClosed ? 'Delete plan' : 'Cancel plan'}
             </Text>
           </Pressable>
         )}
@@ -474,6 +737,31 @@ export default function PlanDetail() {
             </ScrollView>
             <Pressable onPress={closeEvent} disabled={closing} style={{ marginTop: 16, backgroundColor: '#111111', borderRadius: 999, paddingVertical: 15, alignItems: 'center', opacity: closing ? 0.5 : 1 }}>
               <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>{closing ? 'Closing…' : 'Close plan'}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ---- Delete / cancel confirm modal ---- */}
+      <Modal visible={deleteOpen} transparent animationType="slide" onRequestClose={() => !deleting && setDeleteOpen(false)}>
+        <Pressable onPress={() => !deleting && setDeleteOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12) }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 16 }} />
+            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', marginBottom: 4 }}>
+              {isClosed ? 'Delete this plan?' : 'Cancel this plan?'}
+            </Text>
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', marginBottom: 18 }}>
+              {isClosed
+                ? 'This permanently removes the plan and its records. This can’t be undone.'
+                : 'Everyone invited will be notified it’s cancelled. This can’t be undone.'}
+            </Text>
+            <Pressable onPress={deletePlan} disabled={deleting} style={{ backgroundColor: '#B91C1C', borderRadius: 999, paddingVertical: 15, alignItems: 'center', opacity: deleting ? 0.5 : 1 }}>
+              <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+                {deleting ? 'Deleting…' : isClosed ? 'Delete plan' : 'Cancel plan'}
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => !deleting && setDeleteOpen(false)} style={{ paddingVertical: 12, alignItems: 'center', marginTop: 4 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, fontWeight: '600', color: 'rgba(17,17,17,0.6)' }}>Keep it</Text>
             </Pressable>
           </Pressable>
         </Pressable>
