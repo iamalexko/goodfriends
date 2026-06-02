@@ -258,6 +258,13 @@ Defined in `src/index.css` and Tailwind config:
 - Card titles: Plus Jakarta Sans, font-weight: 800, ~16-22px
 - Meta text: `#aaa` (12px) or `#bbb` (9-11px)
 
+**Mobile detail-page accent system** (introduced in the event-detail revamp, PR #45 — inline hexes, not yet tokenised):
+- **Clay** (replaces orange on the detail page): icon `#E2683F`, dark/link `#A23E1F`, tint bg `#FBEAE3`. Used for the When/Where chip icon tiles, the "Maps" pill, "See all", the hero reaction button, post "your-reaction" rings, the composer focus border.
+- **Sage** (calm green): `#3D9970`, used for the "In/coming" guest count.
+- **Ochre** (calm amber): `#D9A441` for the "Likely" guest count.
+- **RSVP selector** intentionally stays the **web-exact** pastel-per-status (mint `#DCFCE7`/`#16A34A`, amber `#FEF3C7`/`#F59E0B`, grey `#F3F4F6`/`#9CA3AF` + soft glow) — the one place we mirror web exactly. Don't "clay" it.
+- **Plan covers** resolve via `resolveCover()` in `@goodfriends/shared` — see the **Event detail page** subsection under Mobile app.
+
 ---
 
 ## Component patterns
@@ -304,6 +311,12 @@ Defined in `src/index.css` and Tailwind config:
   - **Moments** photo + comment feed (PR #37)
 - ✅ **Notifications** screen (`app/notifications.tsx`) — markAllRead on view, tap-through to plan. PR #33.
 - ✅ **Crew** leaderboard (Hall of Fame podium + show-up race + tags). PR #34.
+
+**Post-completion polish & redesign (PRs #40–#45):**
+- ✅ **Tab-bar bottom clipping fix** — every `(tabs)/*` scroll pads `insets.bottom + 72` (NativeTabs is translucent and overlays content; the SafeAreaProvider sits above the UITabBarController so `insets.bottom` is only the home indicator). PR #40.
+- ✅ **Home → day-filtered weekly overview** — greeting + week summary, amber/green day-chips, day-grouped feed, inline RSVP on reply-needed cards. PlanCard re-ranked (name → location → time → faint tier corner chip). PR #41.
+- ✅ **Plans → vertical agenda (Upcoming) + memory-card timeline (Past)** — date-rail agenda; Past grouped by month with "N plans · X% showed" + cover photos / tier-gradient fallbacks; **swipeable** Upcoming↔Past (paged horizontal ScrollView). PR #42.
+- ✅ **Event-detail revamp** (`app/plan/[id].tsx`, PR #45) — see the **Event detail page** subsection below. Built on the cover schema (PR #43) + create-flow cover picker (PR #44).
 
 ### Dev loop
 
@@ -418,6 +431,19 @@ import { House } from 'phosphor-react-native'
 - Contains the wordmark, a **"+ Plan"** pill (→ `/create`), and the **bell** with a live unread badge (realtime `notifications` subscription). The old profile button was removed from the header.
 - Exposes `APP_HEADER_ROW_HEIGHT` so screens can pad their scroll content beneath it. Takes an optional `scrollY` shared value (currently unused — kept for future scroll effects).
 
+### Event detail page (`app/plan/[id].tsx`, PR #45)
+
+A "premium invitation" page. All organiser/Moments logic is unchanged from the original revamp — this is mostly presentation. Key pieces:
+
+- **Cover system** — `resolveCover(plan)`, `COVER_PRESETS`, `TIER_COVER` live in `packages/shared/covers.js` (barrel-exported), so the detail hero, Home cards, and Plans memory cards resolve a cover identically. `resolveCover` returns `{ type:'image', url }` (from `plans.cover_image_url`) or `{ type:'gradient', colors }` (from `plans.cover_preset`, else the tier-gradient fallback). Cover photos upload to `plan-photos` under a **`covers/<uid>/`** prefix (the Storage delete policy was widened to match `foldername[2]` for that prefix — migration `cover_delete_rls_fix`). Created/changed in `create.tsx` and the hero "⋯ → Change cover" sheet (upload / preset swatch / promote an existing Moment photo / reset).
+- **Parallax hero** (`HERO_H = 240`) — `Animated.ScrollView` + a `scrollY` shared value driving `useAnimatedStyle`. The image **lags downward** on scroll (`translateY` interpolates to **positive** `HERO_H/3`) — a negative offset lifts the image out of the `overflow:hidden` hero and exposes the cream page as a white band. Dark `#1A1A1A` hero backdrop as a safety net. Light `StatusBar`. The content sheet overlaps the hero (`marginTop: -20`, rounded top).
+- **Plan-level hype reactions** — `plan_reactions` table (one per user, realtime). Cluster bottom-right of the hero + a reactor sheet; optimistic upsert. **Distinct** from post `reactions`.
+- **Guest summary** — 4-up In/Likely/Out/No-reply counts + avatar clusters → a roster **sheet** grouped by status (nudges + invite-request approve/decline moved into the sheet).
+- **Gesture post-reactions** — posts react via a **long-press** (`react-native-gesture-handler` `Gesture.LongPress`), photos also single-tap → lightbox **immediately**. Double-tap was deliberately dropped: `Gesture.Exclusive(singleTap, doubleTap)` makes the single tap wait ~250ms for the double to fail, which made the lightbox feel laggy.
+- **Floating composer** — the Moments composer is a **bottom-pinned bar** (not in the scroll). The screen root is a `KeyboardAvoidingView` (`behavior="padding"` on iOS) with a `flex:1` ScrollView above the bar, so the composer rises with the keyboard. (This supersedes the old in-scroll composer + `automaticallyAdjustKeyboardInsets`.)
+- **EmojiBurst celebration** (`components/EmojiBurst.tsx`) — dependency-free Reanimated overlay; mount with a fresh `key` to (re)fire. ~28 emoji rain **from above the screen down past the bottom** (one shared `progress` value; per-particle `startY`/drift/spin via `interpolate`). Mixes festive + the crew's own emojis. Fires (+ Success haptic) only on a **fresh** "I'm in". An earlier center-emit "pop up then fall" version read as random scatter — top-down rain is the clean one.
+- **Organiser controls** — consolidated into a single hero **"⋯"** menu (Edit details / Change cover); no more competing floating pencil + Change pill.
+
 ### Patterns + gotchas specific to mobile
 
 **Pressable styles must be static objects.** Never `style={({pressed}) => ({...})}` — that form silently drops `backgroundColor`, `borderColor`, and `flexDirection` on iOS RN in this SDK. Cards render flat, rows stack as columns. Use `style={{...}}`. Press feedback still fires via the native default. (Burned us in PR #19.)
@@ -437,7 +463,9 @@ import { House } from 'phosphor-react-native'
 
 **Moments photo upload uses `fetch → arrayBuffer`, not `File`.** `expo-image-picker` (`mediaTypes: ['images']`) returns an asset with a `file://` `uri`. Upload via `const ab = await fetch(uri).then(r => r.arrayBuffer()); supabase.storage.from('plan-photos').upload(path, ab, { contentType: asset.mimeType })`. Passing a `Blob`/`File` (the web pattern) silently uploads 0 bytes on RN. Set `contentType` explicitly or the object serves as `application/octet-stream`. (PR #37.)
 
-**Keyboard handling for inline inputs: `automaticallyAdjustKeyboardInsets` on the ScrollView** (iOS) is simpler and less error-prone than `KeyboardAvoidingView` for an input that lives mid-scroll (the Moments composer). Pair it with `keyboardShouldPersistTaps="handled"` so tapping send/camera/reaction buttons while the keyboard is up doesn't get swallowed by the dismiss.
+**Keyboard handling — two patterns by input position.** For an input that lives *mid-scroll*, `automaticallyAdjustKeyboardInsets` on the ScrollView (iOS) + `keyboardShouldPersistTaps="handled"` is simplest. For a **bottom-pinned** input (the detail page's floating composer), wrap the screen root in `KeyboardAvoidingView` (`behavior="padding"` on iOS) with a `flex:1` ScrollView above the bar so it rises with the keyboard — don't combine the two.
+
+**Frosted glass needs rich content behind it.** A `BlurView` over the mostly-flat `#FFFBF5` cream reads muddy/washed-out, not premium (tried it on the RSVP selected tile — looked grey and dirty). Over flat backgrounds use a **solid soft tint + a clean border/glow** instead of blur. `BlurView` only pays off over an image or busy content (the `AppHeader` over scrolling feed, photo lightboxes).
 
 **Pre-existing `tsc` noise — don't chase it.** `npx tsc --noEmit` reports ~17 errors in `notifications.tsx`, `GlassSurface.tsx`, `LiquidGlassTabBar.tsx`, `AuthContext.tsx` — all `@types/react` `bigint`/`ReactNode` and phosphor `Icon`-as-JSX type mismatches from a version skew, not real bugs (the app runs fine). The guardrail is **zero NEW errors in the file you touched**: `npx tsc --noEmit -p tsconfig.json 2>&1 | grep 'yourfile'`.
 
@@ -488,7 +516,7 @@ import { House } from 'phosphor-react-native'
 - [ ] **Summary screen** — port web `Summary.jsx` (AI monthly recap). The only unported screen; needs the `generate-summary` edge fn wired + the recap UI.
 - [ ] **Deep links** — handle `goodfriends://join/...` (invite) and `goodfriends://plan/<id>` cold-start routing.
 - [ ] **Push notifications** via `expo-notifications` — NOTE: the plugin + `aps-environment` entitlement were **removed** to unblock device builds on a free/personal Apple team (it can't sign push entitlements). Re-add when on a paid team / EAS Build.
-- [ ] **Device tap-through QA** — the native photo-picker tap and the in-app mutation buttons (RSVP submit, edit save, close attendance, delete, nudge, approve/reject, react) are verified at render + backend level but not via real taps (no sim tap automation). A quick pass on a physical device closes the loop.
+- [ ] **Device tap-through QA** — the native photo-picker tap and the in-app mutation buttons (RSVP submit, edit save, close attendance, delete, nudge, approve/reject, react) are verified at render + backend level but not via real taps (no sim tap automation). Also feel-check the **gesture-heavy bits** that screenshots can't show: detail-page parallax, long-press post reactions, Plans Upcoming↔Past swipe, the floating composer's keyboard rise, and the "I'm in" emoji-burst. A quick pass on a physical device closes the loop.
 - [ ] TestFlight distribution via EAS Build.
 
 **Web + cross-platform**:
