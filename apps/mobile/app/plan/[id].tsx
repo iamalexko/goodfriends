@@ -36,11 +36,11 @@ const RSVP_PILL: Record<string, 'mint' | 'yellow' | 'neutral'> = { in: 'mint', l
 // Quick-react palette — mirrors the web Moments feed.
 const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶', '❓']
 
-// Per-status accents for the selected RSVP tile (ring / soft fill / label / glow).
-const RSVP_TONE: Record<string, { ring: string; fill: string; label: string; glow: string }> = {
-  in: { ring: '#34D399', fill: '#E9FBF2', label: '#15936B', glow: '#34D399' },
-  likely: { ring: '#F59E0B', fill: '#FEF5E5', label: '#B45309', glow: '#F59E0B' },
-  no: { ring: '#B6BCC5', fill: '#F1F2F4', label: '#6B7280', glow: '#C2C7CE' },
+// Selected RSVP tile fills with its status colour (white emoji + label on top).
+const RSVP_TONE: Record<string, { fill: string; glow: string }> = {
+  in: { fill: '#16B98A', glow: '#34D399' },
+  likely: { fill: '#F0990A', glow: '#F59E0B' },
+  no: { fill: '#7E8895', glow: '#9CA3AF' },
 }
 
 function formatPlanDate(dateStr?: string | null) {
@@ -946,19 +946,22 @@ export default function PlanDetail() {
                     style={{
                       flex: 1,
                       alignItems: 'center',
-                      paddingVertical: 15,
+                      paddingVertical: 14,
                       borderRadius: 16,
-                      borderWidth: active ? 1.5 : 1,
-                      borderColor: active ? t.ring : 'rgba(0,0,0,0.08)',
+                      borderWidth: active ? 0 : 1,
+                      borderColor: 'rgba(0,0,0,0.08)',
                       backgroundColor: active ? t.fill : '#FFFFFF',
                       shadowColor: active ? t.glow : '#000000',
-                      shadowOpacity: active ? 0.22 : 0.04,
-                      shadowRadius: active ? 12 : 4,
-                      shadowOffset: { width: 0, height: active ? 5 : 1 },
+                      shadowOpacity: active ? 0.38 : 0.04,
+                      shadowRadius: active ? 13 : 4,
+                      shadowOffset: { width: 0, height: active ? 6 : 1 },
                     }}
                   >
-                    <Text style={{ fontSize: active ? 26 : 22, marginBottom: 4 }}>{opt.emoji}</Text>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, fontWeight: '700', color: active ? t.label : '#111111' }}>
+                    {/* White disc keeps the emoji crisp on the colour fill. */}
+                    <View style={{ width: 38, height: 38, borderRadius: 19, marginBottom: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: active ? '#FFFFFF' : 'transparent' }}>
+                      <Text style={{ fontSize: 22 }}>{opt.emoji}</Text>
+                    </View>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, fontWeight: '700', color: active ? '#FFFFFF' : '#111111' }}>
                       {opt.label}
                     </Text>
                   </Pressable>
