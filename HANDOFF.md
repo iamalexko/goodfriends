@@ -190,12 +190,13 @@ router.replace('/auth' as any)
 | `profiles` | user metadata (display_name, emoji) |
 | `groups` | crews |
 | `group_members` | who's in which crew |
-| `plans` | events (tier 1/2/3, status: open\|closed) |
+| `plans` | events (tier 1/2/3, status: open\|closed). `notes` (free text, shown for all tiers). `cover_image_url` (uploaded cover) / `cover_preset` (preset id) — cover source; **fall back to the tier gradient when both are null** |
 | `rsvps` | per-plan per-user status (`in` \| `likely` \| `no` \| null) |
 | `attendances` | per-plan per-user `came: bool` after close |
 | `member_scores` | denormalised per-member stats (attendance_rate, plans_organised, streak) |
 | `posts` | moments feed entries (type: `photo` \| `comment`) |
-| `reactions` | emoji reactions on posts |
+| `reactions` | emoji reactions on **posts** |
+| `plan_reactions` | plan-level hype reactions (distinct from `reactions`). One per user per plan (`UNIQUE (plan_id, user_id)`). RLS: any group member reads; you write only your own row. In the realtime publication for live hype counts |
 | `notifications` | in-app notification feed |
 | `summaries` | cached AI monthly recap, keyed `(group_id, year_month UNIQUE)`. Stores `headline`, `subtitle`, `moments jsonb`, `model` |
 
