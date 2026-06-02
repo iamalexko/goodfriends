@@ -41,5 +41,6 @@ Keep the three docs in sync; each owns a different thing (see their headers). Ke
 
 ## Repo facts
 - Monorepo (npm workspaces): `apps/web` (Vite+React, production), `apps/mobile` (Expo SDK 54), `packages/shared`.
+- **Expo's API surface shifts between SDKs — read the version-pinned docs** (https://docs.expo.dev/versions/v54.0.0/) before writing Expo/native code; don't trust memory of a different SDK.
 - Supabase project ref: `ligemjbtjpqmrrwyiiyu`.
 - Mobile dev loop: `npx expo start` for JS edits; `npx expo run:ios` only when native config changes. Full loop in HANDOFF.md.

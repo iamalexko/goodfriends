@@ -4,6 +4,12 @@ A social commitment app for a friend group in Dubai. Plans → RSVPs → attenda
 
 **Status (2026-06):** Web app is live in production. The **mobile port is feature-complete** — every web screen has a native iOS equivalent except the AI monthly recap (`Summary.jsx`), which is deliberately deferred. See [Mobile app → Status by phase](#status-by-phase) and [Roadmap](#roadmap).
 
+## Companion docs
+
+- **CLAUDE.md / AGENTS.md** — agent entry points (synced twins; Claude Code reads CLAUDE.md, Codex/others read AGENTS.md). Read first every session.
+- **DESIGN_SYSTEM.md** — design intent & rules (consult before UI work).
+- **ROADMAP.md** — priorities + idea inbox. This file (HANDOFF.md) owns the technical build state.
+
 ---
 
 ## Stack
@@ -512,18 +518,7 @@ A "premium invitation" page. All organiser/Moments logic is unchanged from the o
 
 ## Roadmap
 
-**Mobile** — ✅ **core port complete** (Auth, Home, Plans, Crew, Profile, Create Plan, Plan Detail + Moments, Notifications). Remaining:
-- [ ] **Summary screen** — port web `Summary.jsx` (AI monthly recap). The only unported screen; needs the `generate-summary` edge fn wired + the recap UI.
-- [ ] **Deep links** — handle `goodfriends://join/...` (invite) and `goodfriends://plan/<id>` cold-start routing.
-- [ ] **Push notifications** via `expo-notifications` — NOTE: the plugin + `aps-environment` entitlement were **removed** to unblock device builds on a free/personal Apple team (it can't sign push entitlements). Re-add when on a paid team / EAS Build.
-- [ ] **Device tap-through QA** — the native photo-picker tap and the in-app mutation buttons (RSVP submit, edit save, close attendance, delete, nudge, approve/reject, react) are verified at render + backend level but not via real taps (no sim tap automation). Also feel-check the **gesture-heavy bits** that screenshots can't show: detail-page parallax, long-press post reactions, Plans Upcoming↔Past swipe, the floating composer's keyboard rise, and the "I'm in" emoji-burst. A quick pass on a physical device closes the loop.
-- [ ] TestFlight distribution via EAS Build.
-
-**Web + cross-platform**:
-- [ ] Group invite share UX (link generation + share sheet beyond raw `/join/:code`)
-- [ ] Push notifications (web push or Expo push — WhatsApp layered on top)
-- [ ] Grace pass mechanic (one missed event doesn't break streak)
-- [ ] Extract data-fetching hooks (`useGroup`, `useUpcomingPlans`, `useRSVP`) into `@goodfriends/shared`
+Roadmap moved to ROADMAP.md.
 
 ---
 
