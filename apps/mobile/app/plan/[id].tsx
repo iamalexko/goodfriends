@@ -7,6 +7,7 @@ import { CalendarBlank, Clock, MapPin, PencilSimple, Check, Camera, PaperPlaneTi
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
 import { LinearGradient } from 'expo-linear-gradient'
+import { BlurView } from 'expo-blur'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { useSharedValue, useAnimatedScrollHandler, useAnimatedStyle, interpolate, Extrapolation, runOnJS, FadeInDown } from 'react-native-reanimated'
 import DateTimePicker from '@react-native-community/datetimepicker'
@@ -17,6 +18,7 @@ import { useAuth } from '../../context/AuthContext'
 import { EmojiAvatar } from '../../components/EmojiAvatar'
 import { Pill } from '../../components/Pill'
 import { Loader } from '../../components/Loader'
+import { EmojiBurst } from '../../components/EmojiBurst'
 
 const HERO_H = 240
 
@@ -34,6 +36,13 @@ const RSVP_PILL: Record<string, 'mint' | 'yellow' | 'neutral'> = { in: 'mint', l
 
 // Quick-react palette — mirrors the web Moments feed.
 const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶', '❓']
+
+// Per-status accents for the frosted-glass RSVP tiles (ring / faint tint / label / glow).
+const RSVP_TONE: Record<string, { ring: string; tint: string; label: string; glow: string }> = {
+  in: { ring: 'rgba(52,211,153,0.55)', tint: 'rgba(52,211,153,0.10)', label: '#15936B', glow: '#34D399' },
+  likely: { ring: 'rgba(245,158,11,0.50)', tint: 'rgba(245,158,11,0.10)', label: '#B45309', glow: '#F59E0B' },
+  no: { ring: 'rgba(156,163,175,0.60)', tint: 'rgba(156,163,175,0.12)', label: '#6B7280', glow: '#9CA3AF' },
+}
 
 function formatPlanDate(dateStr?: string | null) {
   if (!dateStr) return ''
@@ -103,6 +112,8 @@ export default function PlanDetail() {
   const [myStatus, setMyStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // Bumped to (re)fire the "I'm in" emoji-burst celebration.
+  const [burstKey, setBurstKey] = useState(0)
 
   // Organiser: edit modal
   const [editOpen, setEditOpen] = useState(false)
@@ -264,7 +275,14 @@ export default function PlanDetail() {
 
   async function setRsvpStatus(status: string) {
     if (!user || !plan || saving) return
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    const wasIn = myStatus === 'in'
+    if (status === 'in' && !wasIn) {
+      // Fresh yes → celebrate the whole page.
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      setBurstKey((k) => k + 1)
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    }
     setMyStatus(status) // optimistic
     setSaving(true)
     const { error } = await supabase
@@ -799,6 +817,9 @@ export default function PlanDetail() {
   })()
   const myPlanReaction = planReactions.find((r) => r.user_id === user?.id)?.emoji || null
 
+  // Celebration confetti = festive + the crew's own emojis (personal touch).
+  const partyEmojis = [...new Set(['🎉', '✨', '🥳', '🔥', '🙌', '💫', ...(rsvps.map((r) => r.profiles?.emoji).filter(Boolean) as string[])])]
+
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
       <StatusBar style="light" />
@@ -918,30 +939,44 @@ export default function PlanDetail() {
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {RSVP_OPTIONS.map((opt) => {
                 const active = myStatus === opt.key
-                const tone = opt.key === 'in' ? '#34D399' : opt.key === 'likely' ? '#F59E0B' : '#9CA3AF'
+                const t = RSVP_TONE[opt.key]
                 return (
                   <Pressable
                     key={opt.key}
                     onPress={() => setRsvpStatus(opt.key)}
                     style={{
                       flex: 1,
-                      alignItems: 'center',
-                      paddingVertical: 15,
                       borderRadius: 16,
-                      borderWidth: 2,
-                      backgroundColor: active ? '#111111' : '#FFFFFF',
-                      borderColor: active ? '#111111' : 'rgba(0,0,0,0.08)',
-                      shadowColor: active ? tone : '#000000',
-                      shadowOpacity: active ? 0.45 : 0.04,
-                      shadowRadius: active ? 12 : 4,
-                      shadowOffset: { width: 0, height: active ? 5 : 1 },
+                      shadowColor: active ? t.glow : '#000000',
+                      shadowOpacity: active ? 0.28 : 0.04,
+                      shadowRadius: active ? 14 : 4,
+                      shadowOffset: { width: 0, height: active ? 6 : 1 },
                     }}
                   >
-                    <Text style={{ fontSize: active ? 26 : 22, marginBottom: 4 }}>{opt.emoji}</Text>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, fontWeight: '700', color: active ? '#FFFFFF' : '#111111' }}>
-                      {opt.label}
-                    </Text>
-                    {active && <View style={{ position: 'absolute', bottom: 6, height: 3, width: '42%', borderRadius: 2, backgroundColor: tone }} />}
+                    {/* Surface — pale frosted glass + thin tone ring when selected, plain white otherwise. */}
+                    <View
+                      style={{
+                        position: 'absolute', left: 0, top: 0, right: 0, bottom: 0,
+                        borderRadius: 16, overflow: 'hidden',
+                        borderWidth: active ? 1.5 : 1,
+                        borderColor: active ? t.ring : 'rgba(0,0,0,0.08)',
+                        backgroundColor: active ? 'transparent' : '#FFFFFF',
+                      }}
+                    >
+                      {active && (
+                        <>
+                          <BlurView intensity={40} tint="light" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }} />
+                          <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: t.tint }} />
+                        </>
+                      )}
+                    </View>
+                    {/* Content */}
+                    <View style={{ alignItems: 'center', paddingVertical: 15 }}>
+                      <Text style={{ fontSize: active ? 26 : 22, marginBottom: 4 }}>{opt.emoji}</Text>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, fontWeight: '700', color: active ? t.label : '#111111' }}>
+                        {opt.label}
+                      </Text>
+                    </View>
                   </Pressable>
                 )
               })}
@@ -1526,6 +1561,9 @@ export default function PlanDetail() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* "I'm in" celebration — spans the whole page over everything. */}
+      {burstKey > 0 && <EmojiBurst key={burstKey} emojis={partyEmojis} />}
     </View>
   )
 }
