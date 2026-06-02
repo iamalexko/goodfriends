@@ -3,5 +3,6 @@
 // vs Expo SecureStore) and lives in each app's lib/ folder.
 
 export * from './constants.js'
+export * from './covers.js'
 export * from './utils/scoring.js'
 export * from './utils/time.js'
