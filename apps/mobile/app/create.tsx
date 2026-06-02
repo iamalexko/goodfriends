@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
+  Alert,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -9,9 +11,12 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { PaperPlaneTilt, Check } from 'phosphor-react-native'
+import { PaperPlaneTilt, Check, Camera } from 'phosphor-react-native'
 import * as Haptics from 'expo-haptics'
+import * as ImagePicker from 'expo-image-picker'
+import { LinearGradient } from 'expo-linear-gradient'
 import DateTimePicker from '@react-native-community/datetimepicker'
+import { COVER_PRESETS } from '@goodfriends/shared'
 
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -85,6 +90,10 @@ export default function Create() {
   const [showDate, setShowDate] = useState(false)
   const [showTime, setShowTime] = useState(false)
 
+  // Cover — an uploaded photo OR a preset gradient id. Mutually exclusive.
+  const [coverPhoto, setCoverPhoto] = useState<ImagePicker.ImagePickerAsset | null>(null)
+  const [coverPreset, setCoverPreset] = useState<string | null>(null)
+
   const [members, setMembers] = useState<Member[]>([])
   const [invited, setInvited] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(false)
@@ -128,6 +137,23 @@ export default function Create() {
     else router.replace('/(tabs)/home' as any)
   }
 
+  async function pickCover() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Photo access needed', 'Enable photo access in Settings to set a cover.')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      allowsEditing: true,
+      aspect: [16, 9],
+    })
+    if (result.canceled || !result.assets?.length) return
+    setCoverPhoto(result.assets[0])
+    setCoverPreset(null) // mutually exclusive
+  }
+
   async function createPlan() {
     if (!name || !dateObj) { setError('Add a name and date'); return }
     const today = ymd(new Date())
@@ -139,6 +165,24 @@ export default function Create() {
     if (!user) { setError('Not signed in'); setLoading(false); return }
     const groupId = await getGroupId(user.id)
     if (!groupId) { setError("Couldn't find your group"); setLoading(false); return }
+
+    // Upload the cover photo if one was picked. A failure here must NOT block
+    // plan creation — the plan still saves and falls back to the tier gradient.
+    let coverUrl: string | null = null
+    if (coverPhoto) {
+      try {
+        const ext = (coverPhoto.uri.split('.').pop() || 'jpg').toLowerCase().split('?')[0]
+        const path = `covers/${user.id}/${Date.now()}.${ext}`
+        const ab = await fetch(coverPhoto.uri).then((r) => r.arrayBuffer())
+        const { error: upErr } = await supabase.storage
+          .from('plan-photos')
+          .upload(path, ab, { contentType: coverPhoto.mimeType || `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: false })
+        if (!upErr) coverUrl = supabase.storage.from('plan-photos').getPublicUrl(path).data.publicUrl
+        else if (__DEV__) console.warn('cover upload', upErr)
+      } catch (e) {
+        if (__DEV__) console.warn('cover upload threw', e)
+      }
+    }
 
     const { data: plan, error: planErr } = await supabase
       .from('plans')
@@ -152,6 +196,8 @@ export default function Create() {
         notes: notes || null,
         tier,
         status: 'open',
+        cover_image_url: coverUrl,
+        cover_preset: coverUrl ? null : coverPreset,
       })
       .select()
       .single()
@@ -249,6 +295,52 @@ export default function Create() {
           </>
         ) : (
           <>
+            <Text style={LABEL}>Cover (optional)</Text>
+
+            {/* Preview band — current choice with the plan emoji floating, or a hint. */}
+            <View style={{ height: 96, borderRadius: 16, overflow: 'hidden', marginBottom: 10, backgroundColor: '#F5F0E8' }}>
+              {coverPhoto ? (
+                <Image source={{ uri: coverPhoto.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              ) : coverPreset ? (
+                <LinearGradient
+                  colors={(COVER_PRESETS.find((p) => p.id === coverPreset)?.colors || ['#000000', '#000000']) as [string, string]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Text style={{ fontSize: 40 }}>{TIERS.find((t) => t.id === tier)?.emoji}</Text>
+                </LinearGradient>
+              ) : (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: '#BBBBBB' }}>
+                    No cover — we'll use a {`Tier ${tier}`} gradient
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Picker row: photo tile + preset swatches. */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+              <Pressable
+                onPress={pickCover}
+                style={{ width: 46, height: 46, borderRadius: 12, marginRight: 8, backgroundColor: 'rgba(0,0,0,0.04)', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Camera size={18} weight="regular" color="#888888" />
+              </Pressable>
+              {COVER_PRESETS.map((p) => {
+                const sel = coverPreset === p.id && !coverPhoto
+                return (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => { setCoverPreset(p.id); setCoverPhoto(null) }}
+                    style={{ marginRight: 8, borderRadius: 12, borderWidth: sel ? 2.5 : 0, borderColor: '#111111' }}
+                  >
+                    <LinearGradient colors={p.colors as [string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 46, height: 46, borderRadius: sel ? 10 : 12 }} />
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
+
             <Text style={LABEL}>Plan name</Text>
             <TextInput
               style={INPUT}
@@ -305,18 +397,16 @@ export default function Create() {
               onChangeText={setLocation}
             />
 
-            {tier === 1 && (
-              <>
-                <Text style={LABEL}>Notes / booking ref</Text>
-                <TextInput
-                  style={INPUT}
-                  placeholder="Optional"
-                  placeholderTextColor="#BBBBBB"
-                  value={notes}
-                  onChangeText={setNotes}
-                />
-              </>
-            )}
+            <Text style={LABEL}>What's the plan?</Text>
+            <TextInput
+              style={[INPUT, { minHeight: 72, textAlignVertical: 'top' }]}
+              placeholder="Dress code, what to bring, the vibe… (optional)"
+              placeholderTextColor="#BBBBBB"
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              maxLength={500}
+            />
 
             <Text style={[LABEL, { marginTop: 4 }]}>Invite your crew</Text>
             {members.length === 0 ? (
