@@ -21,11 +21,12 @@ import { EmojiBurst } from '../../components/EmojiBurst'
 
 const HERO_H = 240
 
-// RSVP options mirror the live DB CHECK constraint on rsvps.status.
+// RSVP options + selected styling — mirrors apps/web/src/screens/PlanDetail.jsx
+// exactly (pastel fill + coloured border + soft glow; ink label + grey sub).
 const RSVP_OPTIONS = [
-  { key: 'in', emoji: '✅', label: "I'm in" },
-  { key: 'likely', emoji: '🤔', label: 'Likely' },
-  { key: 'no', emoji: '😬', label: 'No' },
+  { key: 'in', emoji: '✅', label: "I'm in", sub: '100% there', activeBg: '#DCFCE7', activeBorder: '#16A34A', glow: '#16A34A' },
+  { key: 'likely', emoji: '🤔', label: 'Likely', sub: 'pretty sure', activeBg: '#FEF3C7', activeBorder: '#F59E0B', glow: '#F59E0B' },
+  { key: 'no', emoji: '😬', label: 'No', sub: "can't make it", activeBg: '#F3F4F6', activeBorder: '#9CA3AF', glow: '#9CA3AF' },
 ] as const
 
 const RSVP_LABEL: Record<string, string> = { in: "I'm in", likely: 'Likely', no: 'No' }
@@ -35,13 +36,6 @@ const RSVP_PILL: Record<string, 'mint' | 'yellow' | 'neutral'> = { in: 'mint', l
 
 // Quick-react palette — mirrors the web Moments feed.
 const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶', '❓']
-
-// Selected RSVP tile fills with its status colour (white emoji + label on top).
-const RSVP_TONE: Record<string, { fill: string; glow: string }> = {
-  in: { fill: '#16B98A', glow: '#34D399' },
-  likely: { fill: '#F0990A', glow: '#F59E0B' },
-  no: { fill: '#7E8895', glow: '#9CA3AF' },
-}
 
 function formatPlanDate(dateStr?: string | null) {
   if (!dateStr) return ''
@@ -938,7 +932,6 @@ export default function PlanDetail() {
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {RSVP_OPTIONS.map((opt) => {
                 const active = myStatus === opt.key
-                const t = RSVP_TONE[opt.key]
                 return (
                   <Pressable
                     key={opt.key}
@@ -947,22 +940,23 @@ export default function PlanDetail() {
                       flex: 1,
                       alignItems: 'center',
                       paddingVertical: 14,
-                      borderRadius: 16,
-                      borderWidth: active ? 0 : 1,
-                      borderColor: 'rgba(0,0,0,0.08)',
-                      backgroundColor: active ? t.fill : '#FFFFFF',
-                      shadowColor: active ? t.glow : '#000000',
-                      shadowOpacity: active ? 0.38 : 0.04,
-                      shadowRadius: active ? 13 : 4,
-                      shadowOffset: { width: 0, height: active ? 6 : 1 },
+                      paddingHorizontal: 8,
+                      borderRadius: 14,
+                      borderWidth: active ? 1.5 : 1,
+                      borderColor: active ? opt.activeBorder : 'rgba(255,255,255,0.95)',
+                      backgroundColor: active ? opt.activeBg : 'rgba(255,255,255,0.65)',
+                      shadowColor: active ? opt.glow : '#000000',
+                      shadowOpacity: active ? 0.18 : 0.05,
+                      shadowRadius: active ? 12 : 6,
+                      shadowOffset: { width: 0, height: 2 },
                     }}
                   >
-                    {/* White disc keeps the emoji crisp on the colour fill. */}
-                    <View style={{ width: 38, height: 38, borderRadius: 19, marginBottom: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: active ? '#FFFFFF' : 'transparent' }}>
-                      <Text style={{ fontSize: 22 }}>{opt.emoji}</Text>
-                    </View>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, fontWeight: '700', color: active ? '#FFFFFF' : '#111111' }}>
+                    <Text style={{ fontSize: 24, marginBottom: 4 }}>{opt.emoji}</Text>
+                    <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 12, fontWeight: '800', color: '#111111' }}>
                       {opt.label}
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 10, color: '#AAAAAA', marginTop: 2 }}>
+                      {opt.sub}
                     </Text>
                   </Pressable>
                 )
