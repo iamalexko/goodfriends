@@ -1,18 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
-import { CalendarBlank, Clock, MapPin, PencilSimple, Check, Camera, PaperPlaneTilt, X, DotsThree, Trash, Plus, CornersOut } from 'phosphor-react-native'
+import { StatusBar } from 'expo-status-bar'
+import { CalendarBlank, Clock, MapPin, PencilSimple, Check, Camera, PaperPlaneTilt, X, DotsThree, Trash, CaretLeft, ArrowSquareOut, Smiley, CornersOut } from 'phosphor-react-native'
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
+import { LinearGradient } from 'expo-linear-gradient'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import Animated, { useSharedValue, useAnimatedScrollHandler, useAnimatedStyle, interpolate, Extrapolation, runOnJS } from 'react-native-reanimated'
 import DateTimePicker from '@react-native-community/datetimepicker'
+import { resolveCover, COVER_PRESETS } from '@goodfriends/shared'
 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
-import { BackButton } from '../../components/BackButton'
 import { EmojiAvatar } from '../../components/EmojiAvatar'
 import { Pill } from '../../components/Pill'
 import { Loader } from '../../components/Loader'
+
+const HERO_H = 240
 
 // RSVP options mirror the live DB CHECK constraint on rsvps.status.
 const RSVP_OPTIONS = [
@@ -67,8 +73,11 @@ type PlanRow = {
   status: string
   organiser_id: string
   notes: string | null
+  cover_image_url: string | null
+  cover_preset: string | null
   organiser?: { display_name: string; emoji: string | null } | null
 }
+type PlanReaction = { user_id: string; emoji: string }
 type Reaction = { id: string; emoji: string; user_id: string }
 type Post = {
   id: string
@@ -136,6 +145,25 @@ export default function PlanDetail() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const composerInputRef = useRef<TextInput>(null)
 
+  // Plan-level hype reactions + the floating page reactor (separate from post reactions)
+  const [planReactions, setPlanReactions] = useState<PlanReaction[]>([])
+  const [planReactorOpen, setPlanReactorOpen] = useState(false)
+
+  // Guest roster sheet + change-cover sheet
+  const [guestSheetOpen, setGuestSheetOpen] = useState(false)
+  const [coverSheetOpen, setCoverSheetOpen] = useState(false)
+  const [coverBusy, setCoverBusy] = useState(false)
+
+  // Parallax — scrollY drives the hero translate/scale (UI thread)
+  const scrollY = useSharedValue(0)
+  const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y })
+  const heroStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(scrollY.value, [-HERO_H, 0, HERO_H], [HERO_H / 2, 0, -HERO_H / 3], Extrapolation.CLAMP) },
+      { scale: interpolate(scrollY.value, [-HERO_H, 0], [1.6, 1], Extrapolation.CLAMP) },
+    ],
+  }))
+
   useEffect(() => {
     load()
   }, [id])
@@ -154,6 +182,7 @@ export default function PlanDetail() {
       .channel('posts-' + id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts', filter: `plan_id=eq.${id}` }, loadPosts)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, loadPosts)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'plan_reactions', filter: `plan_id=eq.${id}` }, loadPlanReactions)
       .subscribe()
     return () => { supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -168,6 +197,12 @@ export default function PlanDetail() {
       .order('created_at', { ascending: true })
     if (error) { if (__DEV__) console.warn('loadPosts', error); return }
     setPosts((data || []) as Post[])
+  }
+
+  async function loadPlanReactions() {
+    if (!id) return
+    const { data } = await supabase.from('plan_reactions').select('user_id, emoji').eq('plan_id', id)
+    setPlanReactions((data || []) as PlanReaction[])
   }
 
   async function load() {
@@ -188,6 +223,13 @@ export default function PlanDetail() {
     setRsvps((rsvpData || []) as Rsvp[])
     const mine = (rsvpData || []).find((r: any) => r.user_id === user?.id)
     setMyStatus(mine?.status ?? null)
+
+    // Plan-level hype reactions (group members can read).
+    const { data: prData } = await supabase
+      .from('plan_reactions')
+      .select('user_id, emoji')
+      .eq('plan_id', id)
+    setPlanReactions((prData || []) as PlanReaction[])
 
     const organiserId = (planData as PlanRow).organiser_id
     const amOrganiser = !!user && organiserId === user.id
@@ -640,6 +682,62 @@ export default function PlanDetail() {
     return [...map.entries()]
   }
 
+  // ---- Maps ----
+  function openMaps(location: string) {
+    const q = encodeURIComponent(location)
+    const url = Platform.select({ ios: `maps://?q=${q}`, default: `https://www.google.com/maps/search/?api=1&query=${q}` })!
+    Linking.openURL(url).catch(() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`))
+  }
+
+  // ---- Plan-level hype reaction (one per user; tapping a new emoji replaces) ----
+  async function setPlanReaction(emoji: string) {
+    if (!user || !plan) return
+    setPlanReactorOpen(false)
+    setPlanReactions((prev) => [...prev.filter((r) => r.user_id !== user.id), { user_id: user.id, emoji }])
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    const { error } = await supabase
+      .from('plan_reactions')
+      .upsert({ plan_id: plan.id, user_id: user.id, emoji }, { onConflict: 'plan_id,user_id' })
+    if (error) { if (__DEV__) console.warn('plan reaction', error); loadPlanReactions() }
+  }
+
+  // ---- Organiser: change cover after creation ----
+  async function updateCover(opts: { url?: string; preset?: string }) {
+    if (!plan) return
+    setCoverBusy(true)
+    const { error } = await supabase
+      .from('plans')
+      .update({ cover_image_url: opts.url ?? null, cover_preset: opts.url ? null : (opts.preset ?? null) })
+      .eq('id', plan.id)
+    setCoverBusy(false)
+    if (error) { if (__DEV__) console.warn('updateCover', error); return }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    setCoverSheetOpen(false)
+    load()
+  }
+
+  async function pickCoverForUpdate() {
+    if (!user) return
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) { Alert.alert('Photo access needed', 'Enable photo access in Settings.'); return }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true, aspect: [16, 9] })
+    if (result.canceled || !result.assets?.length) return
+    const asset = result.assets[0]
+    setCoverBusy(true)
+    try {
+      const ext = (asset.uri.split('.').pop() || 'jpg').toLowerCase().split('?')[0]
+      const path = `covers/${user.id}/${Date.now()}.${ext}`
+      const ab = await fetch(asset.uri).then((r) => r.arrayBuffer())
+      const { error: upErr } = await supabase.storage.from('plan-photos').upload(path, ab, { contentType: asset.mimeType || `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: false })
+      if (upErr) { if (__DEV__) console.warn('cover upload', upErr); setCoverBusy(false); return }
+      const url = supabase.storage.from('plan-photos').getPublicUrl(path).data.publicUrl
+      await updateCover({ url })
+    } catch (e) {
+      if (__DEV__) console.warn('cover upload threw', e)
+      setCoverBusy(false)
+    }
+  }
+
   function goBack() {
     if (router.canGoBack()) router.back()
     else router.replace('/(tabs)/home' as any)
@@ -648,7 +746,7 @@ export default function PlanDetail() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFBF5', paddingTop: insets.top }}>
-        <Header onBack={goBack} />
+        <FloatingBack onPress={goBack} dark insets={insets} />
         <Loader />
       </View>
     )
@@ -657,7 +755,7 @@ export default function PlanDetail() {
   if (!plan) {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFBF5', paddingTop: insets.top }}>
-        <Header onBack={goBack} />
+        <FloatingBack onPress={goBack} dark insets={insets} />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
           <Text style={{ fontSize: 28, marginBottom: 8 }}>🤷</Text>
           <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#AAAAAA', textAlign: 'center' }}>
@@ -680,58 +778,129 @@ export default function PlanDetail() {
     (a, b) => (order[a.status ?? ''] ?? 3) - (order[b.status ?? ''] ?? 3),
   )
 
-  return (
-    <View style={{ flex: 1, backgroundColor: '#FFFBF5', paddingTop: insets.top }}>
-      <Header onBack={goBack} onEdit={isOrganiser && !isClosed ? openEdit : undefined} />
+  // ---- Derived for the revamp ----
+  const cover = resolveCover(plan)
+  const tierEmoji = plan.tier === 1 ? '🎉' : plan.tier === 2 ? '🌅' : '☕'
 
-      <ScrollView
+  const inGuests = rsvps.filter((r) => r.status === 'in')
+  const likelyGuests = rsvps.filter((r) => r.status === 'likely')
+  const noGuests = rsvps.filter((r) => r.status === 'no')
+  const noReplyGuests = rsvps.filter((r) => !r.status)
+  const guestCounts = { in: inGuests.length, likely: likelyGuests.length, no: noGuests.length, noReply: noReplyGuests.length }
+
+  const planReactionGroups = (() => {
+    const m = new Map<string, number>()
+    planReactions.forEach((r) => m.set(r.emoji, (m.get(r.emoji) || 0) + 1))
+    return [...m.entries()]
+  })()
+  const myPlanReaction = planReactions.find((r) => r.user_id === user?.id)?.emoji || null
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
+      <StatusBar style="light" />
+
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Math.max(40, insets.bottom + 24) }}
+        contentContainerStyle={{ paddingBottom: Math.max(40, insets.bottom + 24) }}
       >
-        {/* Title + tier */}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginTop: 4 }}>
-          <Text style={{ flex: 1, fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 26, fontWeight: '800', color: '#111111', letterSpacing: -0.5, lineHeight: 30 }}>
-            {plan.name}
-          </Text>
-          <View style={{ marginTop: 4 }}>
-            <Pill variant={TIER_VARIANT[plan.tier] || 'tier3'}>{TIER_LABEL[plan.tier] || `Tier ${plan.tier}`}</Pill>
+        {/* ===== SLICE A — Parallax cover hero ===== */}
+        <View style={{ height: HERO_H, overflow: 'hidden' }}>
+          <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, height: HERO_H }, heroStyle]}>
+            {cover.type === 'image' ? (
+              <Image source={{ uri: cover.url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            ) : (
+              <LinearGradient colors={cover.colors as [string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
+            )}
+            {cover.type !== 'image' && (
+              <Text style={{ position: 'absolute', top: 46, left: 0, right: 0, textAlign: 'center', fontSize: 96, opacity: 0.85 }}>{tierEmoji}</Text>
+            )}
+          </Animated.View>
+          {/* scrim for legibility */}
+          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="none" />
+          {/* title + tier pinned to hero bottom */}
+          <View style={{ position: 'absolute', left: 16, right: 110, bottom: 30 }} pointerEvents="none">
+            <View style={{ alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginBottom: 6 }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, fontWeight: '700', color: '#FFFFFF' }}>{TIER_LABEL[plan.tier] || `Tier ${plan.tier}`}</Text>
+            </View>
+            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5, lineHeight: 28 }}>{plan.name}</Text>
+          </View>
+
+          {/* ===== SLICE C — Hype reaction cluster (bottom-right of hero) ===== */}
+          <View style={{ position: 'absolute', right: 14, bottom: 28, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {planReactionGroups.length > 0 && (
+              <Pressable onPress={() => setPlanReactorOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.42)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }}>
+                {planReactionGroups.slice(0, 4).map(([emoji, count]) => (
+                  <View key={emoji} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <Text style={{ fontSize: 13 }}>{emoji}</Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>{count}</Text>
+                  </View>
+                ))}
+              </Pressable>
+            )}
+            <Pressable onPress={() => setPlanReactorOpen(true)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: myPlanReaction ? '#FB923C' : 'rgba(0,0,0,0.42)', alignItems: 'center', justifyContent: 'center' }}>
+              {myPlanReaction ? <Text style={{ fontSize: 17 }}>{myPlanReaction}</Text> : <Smiley size={19} weight="fill" color="#FFFFFF" />}
+            </Pressable>
           </View>
         </View>
 
-        {isClosed && (
-          <View style={{ marginTop: 8 }}>
-            <Pill variant="neutral">Closed</Pill>
+        {/* ===== Content sheet — overlaps the hero bottom ===== */}
+        <View style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 20, borderTopRightRadius: 20, marginTop: -20, paddingHorizontal: 20, paddingTop: 18 }}>
+          {isClosed && (
+            <View style={{ marginBottom: 12 }}><Pill variant="neutral">Closed</Pill></View>
+          )}
+
+          {/* ===== SLICE B — Meta chips (When / Where→Maps) ===== */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={CHIP}>
+              <View style={CHIP_ICON}><CalendarBlank size={15} weight="fill" color="#FB923C" /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={CHIP_LABEL}>WHEN</Text>
+                <Text style={CHIP_VALUE} numberOfLines={1}>{formatPlanDate(plan.date)}{plan.time ? ` · ${plan.time}` : ''}</Text>
+              </View>
+            </View>
+            {plan.location ? (
+              <Pressable style={CHIP} onPress={() => openMaps(plan.location!)}>
+                <View style={CHIP_ICON}><MapPin size={15} weight="fill" color="#FB923C" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={CHIP_LABEL}>WHERE</Text>
+                  <Text style={CHIP_VALUE} numberOfLines={1}>{plan.location}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, fontWeight: '700', color: '#FB923C' }}>Maps</Text>
+                  <ArrowSquareOut size={11} weight="bold" color="#FB923C" />
+                </View>
+              </Pressable>
+            ) : (
+              <View style={CHIP}>
+                <View style={CHIP_ICON}><MapPin size={15} weight="regular" color="#CCCCCC" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={CHIP_LABEL}>WHERE</Text>
+                  <Text style={[CHIP_VALUE, { color: '#BBBBBB' }]} numberOfLines={1}>Location TBD</Text>
+                </View>
+              </View>
+            )}
           </View>
-        )}
 
-        {/* Meta rows */}
-        <View style={{ gap: 10, marginTop: 16 }}>
-          <MetaRow icon={<CalendarBlank size={16} weight="regular" color="#888888" />} text={formatPlanDate(plan.date)} />
-          {plan.time ? <MetaRow icon={<Clock size={16} weight="regular" color="#888888" />} text={plan.time} /> : null}
-          {plan.location ? <MetaRow icon={<MapPin size={16} weight="regular" color="#888888" />} text={plan.location} /> : null}
-        </View>
-
-        {/* Organiser */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 }}>
-          <EmojiAvatar emoji={plan.organiser?.emoji || '😎'} size="sm" />
-          <View>
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 10, color: '#AAAAAA', letterSpacing: 0.6, textTransform: 'uppercase' }}>
-              Organised by
+          {/* Organiser line */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 }}>
+            <EmojiAvatar emoji={plan.organiser?.emoji || '😎'} size="sm" />
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#888888' }}>
+              Organised by <Text style={{ fontFamily: 'Inter_700Bold', color: '#111111' }}>{plan.organiser?.display_name || 'Someone'}</Text>
             </Text>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#111111', marginTop: 1 }}>
-              {plan.organiser?.display_name || 'Someone'}
-            </Text>
           </View>
-        </View>
 
-        {plan.notes ? (
-          <View style={{ marginTop: 16, backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', padding: 14 }}>
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#555555', lineHeight: 19 }}>{plan.notes}</Text>
-          </View>
-        ) : null}
+          {/* ===== SLICE B — "The plan" callout (notes, all tiers) ===== */}
+          {plan.notes ? (
+            <View style={{ marginTop: 12, backgroundColor: '#FFF8EF', borderWidth: 1, borderColor: '#FCE4C4', borderRadius: 14, padding: 13 }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 8, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: '#C2843A', marginBottom: 4 }}>✨ The plan</Text>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#5a4a36', lineHeight: 19 }}>{plan.notes}</Text>
+            </View>
+          ) : null}
 
-        {/* RSVP selector */}
+          {/* RSVP selector */}
         {!isClosed && (
           <View style={{ marginTop: 24 }}>
             <Text style={SECTION_LABEL}>Your RSVP</Text>
@@ -763,92 +932,38 @@ export default function PlanDetail() {
           </View>
         )}
 
-        {/* Attendees */}
-        <View style={{ marginTop: 28 }}>
-          <Text style={SECTION_LABEL}>
-            Who's coming · {rsvps.filter((r) => r.status === 'in').length} in
-          </Text>
-          {sortedRsvps.length === 0 ? (
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', paddingVertical: 8 }}>
-              No one's been invited yet.
-            </Text>
-          ) : (
-            sortedRsvps.map((r) => (
-              <View
-                key={r.user_id}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                  paddingVertical: 8,
-                  borderBottomWidth: 1,
-                  borderBottomColor: 'rgba(0,0,0,0.05)',
-                }}
-              >
-                <EmojiAvatar emoji={r.profiles?.emoji || '😎'} size="sm" />
-                <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#111111' }}>
-                  {r.profiles?.display_name || 'Someone'}
-                  {r.user_id === plan.organiser_id ? '  ·  host' : ''}
+        {/* ===== SLICE D — Guest summary (full roster in a sheet) ===== */}
+        <View style={{ marginTop: 26 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <Text style={[SECTION_LABEL, { marginBottom: 0 }]}>Who's coming</Text>
+            {isOrganiser && pendingRequests.length > 0 && (
+              <View style={{ backgroundColor: '#FEF3C7', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, fontWeight: '700', color: '#92400E' }}>
+                  {pendingRequests.length} request{pendingRequests.length > 1 ? 's' : ''}
                 </Text>
-                {r.status ? (
-                  <Pill variant={RSVP_PILL[r.status] || 'neutral'}>{RSVP_LABEL[r.status] || r.status}</Pill>
-                ) : isOrganiser && !isClosed && r.user_id !== user?.id ? (
-                  <Pressable
-                    onPress={() => canNudge(r.user_id) && nudgeMember(r.user_id)}
-                    disabled={!canNudge(r.user_id) || nudging === r.user_id}
-                    hitSlop={6}
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 5,
-                      borderRadius: 999,
-                      backgroundColor: canNudge(r.user_id) ? '#FEF3C7' : '#F3F4F6',
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, fontWeight: '700', color: canNudge(r.user_id) ? '#92400E' : '#BBBBBB' }}>
-                      {nudging === r.user_id ? 'Poking…' : canNudge(r.user_id) ? '👈 Nudge' : 'Nudged'}
-                    </Text>
-                  </Pressable>
-                ) : (
-                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: '#CCCCCC' }}>no reply</Text>
-                )}
               </View>
-            ))
-          )}
-        </View>
+            )}
+          </View>
 
-        {/* Invite requests — organiser approves/rejects pending ones */}
-        {isOrganiser && pendingRequests.length > 0 && (
-          <View style={{ marginTop: 28 }}>
-            <Text style={SECTION_LABEL}>Requests to join · {pendingRequests.length}</Text>
-            {pendingRequests.map((req) => (
-              <View
-                key={req.id}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' }}
-              >
-                <EmojiAvatar emoji={req.requester?.emoji || '😎'} size="sm" />
-                <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#111111' }}>
-                  {req.requester?.display_name || 'Someone'}
-                </Text>
-                <Pressable
-                  onPress={() => decideInviteRequest(req, 'rejected')}
-                  disabled={requestBusy}
-                  hitSlop={4}
-                  style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#F3F4F6', marginRight: 6 }}
-                >
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#6B7280' }}>Decline</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => decideInviteRequest(req, 'approved')}
-                  disabled={requestBusy}
-                  hitSlop={4}
-                  style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#111111' }}
-                >
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>Approve</Text>
-                </Pressable>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {([['in', 'In', '#34D399'], ['likely', 'Likely', '#F59E0B'], ['no', 'Out', '#9CA3AF'], ['noReply', 'No reply', '#B6BDC6']] as const).map(([k, label, color]) => (
+              <View key={k} style={{ flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderRadius: 14, paddingVertical: 10, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color }}>{guestCounts[k]}</Text>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 9, fontWeight: '600', color: '#AAAAAA', marginTop: 1 }}>{label}</Text>
               </View>
             ))}
           </View>
-        )}
+
+          <Pressable onPress={() => setGuestSheetOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 10 }}>
+            <FaceCluster guests={[...inGuests, ...likelyGuests]} />
+            <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#888888' }} numberOfLines={1}>
+              {inGuests.length > 0
+                ? `${inGuests[0].profiles?.display_name?.split(' ')[0] || 'Someone'}${inGuests.length > 1 ? ` + ${inGuests.length - 1}` : ''} coming`
+                : sortedRsvps.length ? 'No one in yet' : 'No one invited yet'}
+            </Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#FB923C' }}>See all →</Text>
+          </Pressable>
+        </View>
 
         {/* Non-invited member: request to join */}
         {canRequestInvite && (
@@ -880,68 +995,62 @@ export default function PlanDetail() {
           <View style={{ marginTop: 28 }}>
             <Text style={SECTION_LABEL}>Moments</Text>
 
-            {/* Composer */}
+            {/* ===== SLICE E1 — Unified one-line composer ===== */}
+            {editingPost && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 6 }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#F59E0B' }}>Editing comment…</Text>
+                <Pressable onPress={cancelEditing} hitSlop={8}>
+                  <X size={14} weight="bold" color="#AAAAAA" />
+                </Pressable>
+              </View>
+            )}
             <View
               style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
                 borderWidth: 1,
                 borderColor: composerText.trim() || composerPhoto ? '#FB923C' : 'rgba(0,0,0,0.1)',
-                borderRadius: 18,
+                borderRadius: 999,
                 backgroundColor: '#FFFFFF',
-                overflow: 'hidden',
+                paddingLeft: 8,
+                paddingRight: 6,
+                paddingVertical: 6,
               }}
             >
-              {editingPost && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 10 }}>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#F59E0B' }}>Editing comment…</Text>
-                  <Pressable onPress={cancelEditing} hitSlop={8}>
-                    <X size={14} weight="bold" color="#AAAAAA" />
+              <EmojiAvatar emoji={profile?.emoji || '😎'} size="sm" />
+              {composerPhoto && (
+                <View style={{ width: 34, height: 34, borderRadius: 8, overflow: 'hidden' }}>
+                  <Image source={{ uri: composerPhoto.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  <Pressable onPress={removeComposerPhoto} style={{ position: 'absolute', top: 1, right: 1, width: 14, height: 14, borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
+                    <X size={8} weight="bold" color="#FFFFFF" />
                   </Pressable>
                 </View>
               )}
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 12 }}>
-                <EmojiAvatar emoji={profile?.emoji || '😎'} size="sm" />
-                {composerPhoto && (
-                  <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden' }}>
-                    <Image source={{ uri: composerPhoto.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                    <Pressable
-                      onPress={removeComposerPhoto}
-                      style={{ position: 'absolute', top: 3, right: 3, width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <X size={10} weight="bold" color="#FFFFFF" />
-                    </Pressable>
-                  </View>
+              <TextInput
+                ref={composerInputRef}
+                value={composerText}
+                onChangeText={setComposerText}
+                placeholder={composerPhoto ? 'Add a caption…' : 'Add a moment…'}
+                placeholderTextColor="#BBBBBB"
+                style={{ flex: 1, fontFamily: 'Inter_500Medium', fontSize: 14, color: '#111111', paddingVertical: 4 }}
+              />
+              {!editingPost && (
+                <Pressable onPress={pickPhoto} hitSlop={6} style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+                  <Camera size={18} weight="regular" color="#888888" />
+                </Pressable>
+              )}
+              <Pressable
+                onPress={submitPost}
+                disabled={uploading || (!composerText.trim() && !composerPhoto)}
+                style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: composerText.trim() || composerPhoto ? '#111111' : '#E5E7EB' }}
+              >
+                {uploading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <PaperPlaneTilt size={16} weight="fill" color={composerText.trim() || composerPhoto ? '#FFFFFF' : '#AAAAAA'} />
                 )}
-                <TextInput
-                  ref={composerInputRef}
-                  value={composerText}
-                  onChangeText={setComposerText}
-                  placeholder={composerPhoto ? 'Add a caption… (optional)' : 'Add a moment…'}
-                  placeholderTextColor="#BBBBBB"
-                  multiline
-                  style={{ flex: 1, fontFamily: 'Inter_500Medium', fontSize: 14, color: '#111111', minHeight: 38, paddingTop: 6 }}
-                />
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' }}>
-                <Pressable
-                  onPress={pickPhoto}
-                  disabled={!!editingPost}
-                  hitSlop={8}
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.04)', alignItems: 'center', justifyContent: 'center', opacity: editingPost ? 0.4 : 1 }}
-                >
-                  <Camera size={16} weight="regular" color="#888888" />
-                </Pressable>
-                <Pressable
-                  onPress={submitPost}
-                  disabled={uploading || (!composerText.trim() && !composerPhoto)}
-                  style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: composerText.trim() || composerPhoto ? '#111111' : '#E5E7EB' }}
-                >
-                  {uploading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <PaperPlaneTilt size={16} weight="fill" color={composerText.trim() || composerPhoto ? '#FFFFFF' : '#AAAAAA'} />
-                  )}
-                </Pressable>
-              </View>
+              </Pressable>
             </View>
 
             {/* Uploading skeleton */}
@@ -970,6 +1079,10 @@ export default function PlanDetail() {
                 const isOwn = post.user_id === user?.id
                 const myReaction = post.reactions?.find((r) => r.user_id === user?.id)
                 const grouped = groupReactions(post.reactions)
+                // Gesture reactions: long-press opens the reactor; on photos a
+                // single tap opens the lightbox immediately (double-tap dropped
+                // to keep the lightbox instant — see PR notes).
+                const openReactor = () => setReactionPickerId(post.id)
 
                 const reactionsBar = (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, position: 'relative' }}>
@@ -986,13 +1099,6 @@ export default function PlanDetail() {
                         </Pressable>
                       )
                     })}
-                    <Pressable
-                      onPress={() => setReactionPickerId(reactionPickerId === post.id ? null : post.id)}
-                      hitSlop={6}
-                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.05)', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <Plus size={12} weight="bold" color="#888888" />
-                    </Pressable>
                     {reactionPickerId === post.id && (
                       <View
                         style={{ position: 'absolute', bottom: 34, left: 0, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8, zIndex: 30 }}
@@ -1026,16 +1132,23 @@ export default function PlanDetail() {
                 )
 
                 if (post.type === 'photo' && post.image_url) {
+                  const imageUrl = post.image_url
+                  const photoGesture = Gesture.Exclusive(
+                    Gesture.LongPress().minDuration(300).onStart(() => { runOnJS(openReactor)() }),
+                    Gesture.Tap().onEnd(() => { runOnJS(setLightboxUrl)(imageUrl) }),
+                  )
                   return (
                     <View key={post.id}>
                       {header}
-                      <Pressable onPress={() => setLightboxUrl(post.image_url)} style={{ width: '100%', height: 200, borderRadius: 14, overflow: 'hidden', backgroundColor: '#F1F1F1' }}>
-                        <Image source={{ uri: post.image_url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                        <View style={{ position: 'absolute', bottom: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                          <CornersOut size={10} weight="bold" color="#FFFFFF" />
-                          <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>View full</Text>
+                      <GestureDetector gesture={photoGesture}>
+                        <View style={{ width: '100%', height: 200, borderRadius: 14, overflow: 'hidden', backgroundColor: '#F1F1F1' }}>
+                          <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                          <View style={{ position: 'absolute', bottom: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                            <CornersOut size={10} weight="bold" color="#FFFFFF" />
+                            <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>View full</Text>
+                          </View>
                         </View>
-                      </Pressable>
+                      </GestureDetector>
                       {post.caption ? (
                         <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#111111', lineHeight: 19, marginTop: 6 }}>
                           {post.caption}
@@ -1046,15 +1159,18 @@ export default function PlanDetail() {
                   )
                 }
 
-                // Comment — speech bubble
+                // Comment — speech bubble (long-press to react)
+                const commentGesture = Gesture.LongPress().minDuration(300).onStart(() => { runOnJS(openReactor)() })
                 return (
                   <View key={post.id}>
                     {header}
-                    <View style={{ alignSelf: 'flex-start', maxWidth: '100%', backgroundColor: 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderTopLeftRadius: 2, borderTopRightRadius: 14, borderBottomLeftRadius: 14, borderBottomRightRadius: 14, paddingHorizontal: 12, paddingVertical: 10 }}>
-                      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#111111', lineHeight: 19 }}>
-                        {post.content}
-                      </Text>
-                    </View>
+                    <GestureDetector gesture={commentGesture}>
+                      <View style={{ alignSelf: 'flex-start', maxWidth: '100%', backgroundColor: 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderTopLeftRadius: 2, borderTopRightRadius: 14, borderBottomLeftRadius: 14, borderBottomRightRadius: 14, paddingHorizontal: 12, paddingVertical: 10 }}>
+                        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#111111', lineHeight: 19 }}>
+                          {post.content}
+                        </Text>
+                      </View>
+                    </GestureDetector>
                     {reactionsBar}
                   </View>
                 )
@@ -1089,7 +1205,24 @@ export default function PlanDetail() {
             </Text>
           </Pressable>
         )}
-      </ScrollView>
+        </View>
+      </Animated.ScrollView>
+
+      {/* ===== Floating controls (over the scroll, don't scroll away) ===== */}
+      <FloatingBack onPress={goBack} insets={insets} />
+      <View style={{ position: 'absolute', top: insets.top + 6, right: 14, flexDirection: 'row', gap: 8 }}>
+        {isOrganiser && !isClosed && (
+          <Pressable onPress={openEdit} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}>
+            <PencilSimple size={16} weight="bold" color="#FFFFFF" />
+          </Pressable>
+        )}
+        {isOrganiser && (
+          <Pressable onPress={() => setCoverSheetOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, height: 38, borderRadius: 19, paddingHorizontal: 13, backgroundColor: 'rgba(0,0,0,0.4)' }}>
+            <Camera size={14} weight="fill" color="#FFFFFF" />
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>Change</Text>
+          </Pressable>
+        )}
+      </View>
 
       {/* ---- Edit modal ---- */}
       <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => !savingEdit && setEditOpen(false)}>
@@ -1245,35 +1378,176 @@ export default function PlanDetail() {
           </Pressable>
         </Pressable>
       </Modal>
-    </View>
-  )
-}
 
-function Header({ onBack, onEdit }: { onBack: () => void; onEdit?: () => void }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}>
-      <BackButton onPress={onBack} />
-      <Text style={{ flex: 1, fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', letterSpacing: -0.3 }}>
-        Plan
-      </Text>
-      {onEdit && (
-        <Pressable
-          onPress={onEdit}
-          hitSlop={8}
-          style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <PencilSimple size={16} weight="bold" color="#111111" />
+      {/* ---- SLICE C — Plan hype reactor ---- */}
+      <Modal visible={planReactorOpen} transparent animationType="fade" onRequestClose={() => setPlanReactorOpen(false)}>
+        <Pressable onPress={() => setPlanReactorOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12) }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 16 }} />
+            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 16, fontWeight: '800', color: '#111111', marginBottom: 14 }}>Hype it up</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              {REACTION_OPTIONS.map((e) => {
+                const sel = myPlanReaction === e
+                return (
+                  <Pressable key={e} onPress={() => setPlanReaction(e)} style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: sel ? '#FEF3C7' : 'rgba(0,0,0,0.04)', borderWidth: sel ? 1.5 : 0, borderColor: '#FB923C' }}>
+                    <Text style={{ fontSize: 24 }}>{e}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          </Pressable>
         </Pressable>
-      )}
+      </Modal>
+
+      {/* ---- SLICE D — Guest roster sheet ---- */}
+      <Modal visible={guestSheetOpen} transparent animationType="slide" onRequestClose={() => setGuestSheetOpen(false)}>
+        <Pressable onPress={() => setGuestSheetOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '85%' }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 14 }} />
+            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', marginBottom: 12 }}>The guest list</Text>
+            <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+              {isOrganiser && pendingRequests.length > 0 && (
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={SECTION_LABEL}>Requests to join · {pendingRequests.length}</Text>
+                  {pendingRequests.map((req) => (
+                    <View key={req.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' }}>
+                      <EmojiAvatar emoji={req.requester?.emoji || '😎'} size="sm" />
+                      <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#111111' }}>{req.requester?.display_name || 'Someone'}</Text>
+                      <Pressable onPress={() => decideInviteRequest(req, 'rejected')} disabled={requestBusy} hitSlop={4} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#F3F4F6', marginRight: 6 }}>
+                        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#6B7280' }}>Decline</Text>
+                      </Pressable>
+                      <Pressable onPress={() => decideInviteRequest(req, 'approved')} disabled={requestBusy} hitSlop={4} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#111111' }}>
+                        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>Approve</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {([['in', 'In'], ['likely', 'Likely'], ['no', 'Out'], ['noReply', 'No reply']] as const).map(([k, label]) => {
+                const group = k === 'in' ? inGuests : k === 'likely' ? likelyGuests : k === 'no' ? noGuests : noReplyGuests
+                if (group.length === 0) return null
+                return (
+                  <View key={k} style={{ marginBottom: 6 }}>
+                    <Text style={SECTION_LABEL}>{label} · {group.length}</Text>
+                    {group.map((r) => (
+                      <View key={r.user_id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' }}>
+                        <EmojiAvatar emoji={r.profiles?.emoji || '😎'} size="sm" />
+                        <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#111111' }}>
+                          {r.profiles?.display_name || 'Someone'}{r.user_id === plan.organiser_id ? '  ·  host' : ''}
+                        </Text>
+                        {k === 'noReply' && isOrganiser && !isClosed && r.user_id !== user?.id ? (
+                          <Pressable onPress={() => canNudge(r.user_id) && nudgeMember(r.user_id)} disabled={!canNudge(r.user_id) || nudging === r.user_id} hitSlop={6} style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: canNudge(r.user_id) ? '#FEF3C7' : '#F3F4F6' }}>
+                            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, fontWeight: '700', color: canNudge(r.user_id) ? '#92400E' : '#BBBBBB' }}>
+                              {nudging === r.user_id ? 'Poking…' : canNudge(r.user_id) ? '👈 Nudge' : 'Nudged'}
+                            </Text>
+                          </Pressable>
+                        ) : r.status ? (
+                          <Pill variant={RSVP_PILL[r.status] || 'neutral'}>{RSVP_LABEL[r.status] || r.status}</Pill>
+                        ) : (
+                          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: '#CCCCCC' }}>no reply</Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )
+              })}
+
+              {sortedRsvps.length === 0 && pendingRequests.length === 0 && (
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', paddingVertical: 8 }}>No one's been invited yet.</Text>
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ---- SLICE F — Change cover sheet (organiser) ---- */}
+      <Modal visible={coverSheetOpen} transparent animationType="slide" onRequestClose={() => !coverBusy && setCoverSheetOpen(false)}>
+        <Pressable onPress={() => !coverBusy && setCoverSheetOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '85%' }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 14 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111' }}>Change cover</Text>
+              {coverBusy && <ActivityIndicator color="#FB923C" />}
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+              <Text style={FIELD_LABEL}>Upload or pick a colour</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                <Pressable onPress={pickCoverForUpdate} disabled={coverBusy} style={{ width: 46, height: 46, borderRadius: 12, marginRight: 8, backgroundColor: 'rgba(0,0,0,0.04)', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Camera size={18} weight="regular" color="#888888" />
+                </Pressable>
+                {COVER_PRESETS.map((p) => {
+                  const sel = plan.cover_preset === p.id && !plan.cover_image_url
+                  return (
+                    <Pressable key={p.id} onPress={() => updateCover({ preset: p.id })} disabled={coverBusy} style={{ marginRight: 8, borderRadius: 12, borderWidth: sel ? 2.5 : 0, borderColor: '#111111' }}>
+                      <LinearGradient colors={p.colors as [string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 46, height: 46, borderRadius: sel ? 10 : 12 }} />
+                    </Pressable>
+                  )
+                })}
+              </ScrollView>
+
+              {posts.filter((p) => p.type === 'photo' && p.image_url).length > 0 && (
+                <>
+                  <Text style={FIELD_LABEL}>Use a Moment photo</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {posts.filter((p) => p.type === 'photo' && p.image_url).map((p) => {
+                      const sel = plan.cover_image_url === p.image_url
+                      return (
+                        <Pressable key={p.id} onPress={() => updateCover({ url: p.image_url! })} disabled={coverBusy} style={{ width: 72, height: 72, borderRadius: 12, overflow: 'hidden', borderWidth: sel ? 2.5 : 0, borderColor: '#111111' }}>
+                          <Image source={{ uri: p.image_url! }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+                </>
+              )}
+
+              <Pressable onPress={() => updateCover({})} disabled={coverBusy} style={{ marginTop: 18, paddingVertical: 12, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, fontWeight: '700', color: '#888888' }}>Reset to tier gradient</Text>
+              </Pressable>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   )
 }
 
-function MetaRow({ icon, text }: { icon: React.ReactNode; text: string }) {
+function FloatingBack({ onPress, insets, dark }: { onPress: () => void; insets: { top: number }; dark?: boolean }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      {icon}
-      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: '#555555' }}>{text}</Text>
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      style={{ position: 'absolute', top: insets.top + 6, left: 14, width: 38, height: 38, borderRadius: 19, backgroundColor: dark ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+    >
+      <CaretLeft size={18} weight="bold" color={dark ? '#111111' : '#FFFFFF'} />
+    </Pressable>
+  )
+}
+
+// Overlapping avatar cluster for the guest summary.
+function FaceCluster({ guests, max = 5 }: { guests: Rsvp[]; max?: number }) {
+  if (guests.length === 0) {
+    return (
+      <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 13 }}>🫥</Text>
+      </View>
+    )
+  }
+  const shown = guests.slice(0, max)
+  const extra = guests.length - shown.length
+  return (
+    <View style={{ flexDirection: 'row' }}>
+      {shown.map((g, i) => (
+        <View key={g.user_id} style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFBF5', marginLeft: i === 0 ? 0 : -10 }}>
+          <Text style={{ fontSize: 15 }}>{g.profiles?.emoji || '😎'}</Text>
+        </View>
+      ))}
+      {extra > 0 && (
+        <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#111111', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFBF5', marginLeft: -10 }}>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>+{extra}</Text>
+        </View>
+      )}
     </View>
   )
 }
@@ -1286,6 +1560,44 @@ const SECTION_LABEL = {
   textTransform: 'uppercase' as const,
   color: '#BBBBBB',
   marginBottom: 12,
+}
+
+const CHIP = {
+  flex: 1,
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  gap: 8,
+  backgroundColor: '#FFFFFF',
+  borderWidth: 1,
+  borderColor: 'rgba(0,0,0,0.06)',
+  borderRadius: 14,
+  paddingHorizontal: 11,
+  paddingVertical: 10,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.04,
+  shadowRadius: 4,
+}
+const CHIP_ICON = {
+  width: 28,
+  height: 28,
+  borderRadius: 9,
+  backgroundColor: '#FFF3E6',
+  alignItems: 'center' as const,
+  justifyContent: 'center' as const,
+}
+const CHIP_LABEL = {
+  fontFamily: 'Inter_700Bold' as const,
+  fontSize: 8,
+  fontWeight: '700' as const,
+  letterSpacing: 0.6,
+  color: '#BBBBBB',
+  marginBottom: 1,
+}
+const CHIP_VALUE = {
+  fontFamily: 'Inter_600SemiBold' as const,
+  fontSize: 12,
+  color: '#111111',
 }
 
 const FIELD_LABEL = {
