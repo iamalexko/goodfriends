@@ -157,9 +157,12 @@ export default function PlanDetail() {
   // Parallax — scrollY drives the hero translate/scale (UI thread)
   const scrollY = useSharedValue(0)
   const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y })
+  // Parallax: on pull-down the image scales up to fill the stretch; on
+  // scroll-down it LAGS DOWNWARD (positive translateY) so its bottom edge
+  // never lifts out of the overflow-hidden hero and exposes the page behind.
   const heroStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: interpolate(scrollY.value, [-HERO_H, 0, HERO_H], [HERO_H / 2, 0, -HERO_H / 3], Extrapolation.CLAMP) },
+      { translateY: interpolate(scrollY.value, [-HERO_H, 0, HERO_H], [HERO_H / 2, 0, HERO_H / 3], Extrapolation.CLAMP) },
       { scale: interpolate(scrollY.value, [-HERO_H, 0], [1.6, 1], Extrapolation.CLAMP) },
     ],
   }))
@@ -807,7 +810,7 @@ export default function PlanDetail() {
         contentContainerStyle={{ paddingBottom: Math.max(40, insets.bottom + 24) }}
       >
         {/* ===== SLICE A — Parallax cover hero ===== */}
-        <View style={{ height: HERO_H, overflow: 'hidden' }}>
+        <View style={{ height: HERO_H, overflow: 'hidden', backgroundColor: '#1A1A1A' }}>
           <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, height: HERO_H }, heroStyle]}>
             {cover.type === 'image' ? (
               <Image source={{ uri: cover.url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
