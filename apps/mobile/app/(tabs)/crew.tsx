@@ -149,7 +149,7 @@ export default function Crew() {
         <Animated.ScrollView
           onScroll={onScroll}
           scrollEventThrottle={16}
-          contentContainerStyle={{ paddingTop: headerPadTop, paddingBottom: 24 }}
+          contentContainerStyle={{ paddingTop: headerPadTop, paddingBottom: insets.bottom + 72 }}
         >
           {/* Group hero */}
           <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderRadius: 20, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 }}>
