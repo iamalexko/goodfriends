@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import Animated, { useSharedValue, useAnimatedScrollHandler, useAnimatedStyle, interpolate, Extrapolation, runOnJS } from 'react-native-reanimated'
+import Animated, { useSharedValue, useAnimatedScrollHandler, useAnimatedStyle, interpolate, Extrapolation, runOnJS, FadeInDown } from 'react-native-reanimated'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { resolveCover, COVER_PRESETS } from '@goodfriends/shared'
 
@@ -784,6 +784,7 @@ export default function PlanDetail() {
   // ---- Derived for the revamp ----
   const cover = resolveCover(plan)
   const tierEmoji = plan.tier === 1 ? '🎉' : plan.tier === 2 ? '🌅' : '☕'
+  const heroWhen = `${formatPlanDate(plan.date)}${plan.time ? ` · ${plan.time}` : ''}`.toUpperCase()
 
   const inGuests = rsvps.filter((r) => r.status === 'in')
   const likelyGuests = rsvps.filter((r) => r.status === 'likely')
@@ -818,17 +819,22 @@ export default function PlanDetail() {
               <LinearGradient colors={cover.colors as [string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
             )}
             {cover.type !== 'image' && (
-              <Text style={{ position: 'absolute', top: 46, left: 0, right: 0, textAlign: 'center', fontSize: 96, opacity: 0.85 }}>{tierEmoji}</Text>
+              <>
+                {/* Lit highlight overlay — turns the flat gradient into a dimensional, mesh-like wash. */}
+                <LinearGradient colors={['rgba(255,255,255,0.38)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 0.85, y: 0.85 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: HERO_H }} pointerEvents="none" />
+                <Text style={{ position: 'absolute', top: 34, left: 0, right: 0, textAlign: 'center', fontSize: 112, opacity: 0.8, transform: [{ rotate: '-7deg' }] }}>{tierEmoji}</Text>
+              </>
             )}
           </Animated.View>
           {/* scrim for legibility */}
-          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="none" />
-          {/* title + tier pinned to hero bottom */}
-          <View style={{ position: 'absolute', left: 16, right: 110, bottom: 30 }} pointerEvents="none">
-            <View style={{ alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginBottom: 6 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, fontWeight: '700', color: '#FFFFFF' }}>{TIER_LABEL[plan.tier] || `Tier ${plan.tier}`}</Text>
+          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.68)']} locations={[0, 0.45, 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="none" />
+          {/* title + tier + when, pinned to hero bottom (editorial stack) */}
+          <View style={{ position: 'absolute', left: 18, right: 100, bottom: 26 }} pointerEvents="none">
+            <View style={{ alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginBottom: 8 }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, fontWeight: '700', letterSpacing: 0.4, color: '#FFFFFF' }}>{TIER_LABEL[plan.tier] || `Tier ${plan.tier}`}</Text>
             </View>
-            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5, lineHeight: 28 }}>{plan.name}</Text>
+            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 28, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.7, lineHeight: 31, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10 }}>{plan.name}</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, fontWeight: '700', letterSpacing: 1.2, color: 'rgba(255,255,255,0.92)', marginTop: 8 }} numberOfLines={1}>{heroWhen}</Text>
           </View>
 
           {/* ===== SLICE C — Hype reaction cluster (bottom-right of hero) ===== */}
@@ -851,12 +857,14 @@ export default function PlanDetail() {
 
         {/* ===== Content sheet — overlaps the hero bottom ===== */}
         <View style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 20, borderTopRightRadius: 20, marginTop: -20, paddingHorizontal: 20, paddingTop: 18 }}>
+          {/* Warm glow under the hero edge — atmosphere instead of flat cream. */}
+          <LinearGradient colors={['#FFF1DE', 'rgba(255,251,245,0)']} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 150, borderTopLeftRadius: 20, borderTopRightRadius: 20 }} pointerEvents="none" />
           {isClosed && (
             <View style={{ marginBottom: 12 }}><Pill variant="neutral">Closed</Pill></View>
           )}
 
           {/* ===== SLICE B — Meta chips (When / Where→Maps) ===== */}
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Animated.View entering={FadeInDown.duration(440).delay(60)} style={{ flexDirection: 'row', gap: 10 }}>
             <View style={CHIP}>
               <View style={CHIP_ICON}><CalendarBlank size={15} weight="fill" color="#FB923C" /></View>
               <View style={{ flex: 1 }}>
@@ -885,7 +893,7 @@ export default function PlanDetail() {
                 </View>
               </View>
             )}
-          </View>
+          </Animated.View>
 
           {/* Organiser line */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 }}>
@@ -905,11 +913,12 @@ export default function PlanDetail() {
 
           {/* RSVP selector */}
         {!isClosed && (
-          <View style={{ marginTop: 24 }}>
+          <Animated.View entering={FadeInDown.duration(440).delay(140)} style={{ marginTop: 24 }}>
             <Text style={SECTION_LABEL}>Your RSVP</Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {RSVP_OPTIONS.map((opt) => {
                 const active = myStatus === opt.key
+                const tone = opt.key === 'in' ? '#34D399' : opt.key === 'likely' ? '#F59E0B' : '#9CA3AF'
                 return (
                   <Pressable
                     key={opt.key}
@@ -917,26 +926,31 @@ export default function PlanDetail() {
                     style={{
                       flex: 1,
                       alignItems: 'center',
-                      paddingVertical: 14,
+                      paddingVertical: 15,
                       borderRadius: 16,
                       borderWidth: 2,
                       backgroundColor: active ? '#111111' : '#FFFFFF',
-                      borderColor: active ? '#111111' : 'rgba(0,0,0,0.1)',
+                      borderColor: active ? '#111111' : 'rgba(0,0,0,0.08)',
+                      shadowColor: active ? tone : '#000000',
+                      shadowOpacity: active ? 0.45 : 0.04,
+                      shadowRadius: active ? 12 : 4,
+                      shadowOffset: { width: 0, height: active ? 5 : 1 },
                     }}
                   >
-                    <Text style={{ fontSize: 22, marginBottom: 4 }}>{opt.emoji}</Text>
+                    <Text style={{ fontSize: active ? 26 : 22, marginBottom: 4 }}>{opt.emoji}</Text>
                     <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, fontWeight: '700', color: active ? '#FFFFFF' : '#111111' }}>
                       {opt.label}
                     </Text>
+                    {active && <View style={{ position: 'absolute', bottom: 6, height: 3, width: '42%', borderRadius: 2, backgroundColor: tone }} />}
                   </Pressable>
                 )
               })}
             </View>
-          </View>
+          </Animated.View>
         )}
 
         {/* ===== SLICE D — Guest summary (full roster in a sheet) ===== */}
-        <View style={{ marginTop: 26 }}>
+        <Animated.View entering={FadeInDown.duration(440).delay(220)} style={{ marginTop: 26 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <Text style={[SECTION_LABEL, { marginBottom: 0 }]}>Who's coming</Text>
             {isOrganiser && pendingRequests.length > 0 && (
@@ -966,7 +980,7 @@ export default function PlanDetail() {
             </Text>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#FB923C' }}>See all →</Text>
           </Pressable>
-        </View>
+        </Animated.View>
 
         {/* Non-invited member: request to join */}
         {canRequestInvite && (
