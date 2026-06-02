@@ -21,6 +21,9 @@ export type Plan = {
   rsvp_faces?: string[]
   // Plans screen variant only — organiser embed from the rsvp join.
   organiser?: { display_name?: string | null; emoji?: string | null } | null
+  // Plans → Past memory timeline only — attendance summary + cover photo.
+  attendance?: { came: number; total: number }
+  photos?: { cover: string | null; count: number }
 }
 
 // Tier chip: short T1/T2/T3 label, but each tier keeps its distinct colour
