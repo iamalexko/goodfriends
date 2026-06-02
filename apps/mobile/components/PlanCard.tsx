@@ -23,9 +23,14 @@ export type Plan = {
   organiser?: { display_name?: string | null; emoji?: string | null } | null
 }
 
-// Tier chip: ALL tiers use the same faint low-contrast treatment — tier is
-// deliberately de-emphasized per the card hierarchy (name > location > time > tier).
+// Tier chip: short T1/T2/T3 label, but each tier keeps its distinct colour
+// (matching the Pill tier1/2/3 variants) — dark T1, amber T2, grey T3.
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: 'T1', 2: 'T2', 3: 'T3' }
+const TIER_CHIP: Record<1 | 2 | 3, { bg: string; fg: string; border?: string }> = {
+  1: { bg: '#111111', fg: '#FFFFFF' },
+  2: { bg: '#FEF3C7', fg: '#92400E', border: '#FCD34D' },
+  3: { bg: '#F3F4F6', fg: '#AAAAAA' },
+}
 
 function formatPlanDate(dateStr: string) {
   const d = new Date(dateStr)
@@ -69,19 +74,21 @@ export function PlanCard({
         elevation: 3,
       }}
     >
-      {/* Faint tier corner chip — top-right, low contrast, quiet by design. */}
+      {/* Tier corner chip — top-right, colour-coded per tier (T1 dark / T2 amber / T3 grey). */}
       <View
         style={{
           position: 'absolute',
           top: 13,
           right: 14,
-          backgroundColor: '#F3F4F6',
+          backgroundColor: TIER_CHIP[plan.tier].bg,
+          borderWidth: TIER_CHIP[plan.tier].border ? 1 : 0,
+          borderColor: TIER_CHIP[plan.tier].border,
           paddingHorizontal: 7,
           paddingVertical: 2,
           borderRadius: 6,
         }}
       >
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 8, fontWeight: '700', letterSpacing: 0.4, color: '#AAAAAA' }}>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 8, fontWeight: '700', letterSpacing: 0.4, color: TIER_CHIP[plan.tier].fg }}>
           {TIER_LABEL[plan.tier]}
         </Text>
       </View>
