@@ -7,7 +7,6 @@ import { CalendarBlank, Clock, MapPin, PencilSimple, Check, Camera, PaperPlaneTi
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
 import { LinearGradient } from 'expo-linear-gradient'
-import { BlurView } from 'expo-blur'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { useSharedValue, useAnimatedScrollHandler, useAnimatedStyle, interpolate, Extrapolation, runOnJS, FadeInDown } from 'react-native-reanimated'
 import DateTimePicker from '@react-native-community/datetimepicker'
@@ -37,11 +36,11 @@ const RSVP_PILL: Record<string, 'mint' | 'yellow' | 'neutral'> = { in: 'mint', l
 // Quick-react palette — mirrors the web Moments feed.
 const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶', '❓']
 
-// Per-status accents for the frosted-glass RSVP tiles (ring / faint tint / label / glow).
-const RSVP_TONE: Record<string, { ring: string; tint: string; label: string; glow: string }> = {
-  in: { ring: 'rgba(52,211,153,0.55)', tint: 'rgba(52,211,153,0.10)', label: '#15936B', glow: '#34D399' },
-  likely: { ring: 'rgba(245,158,11,0.50)', tint: 'rgba(245,158,11,0.10)', label: '#B45309', glow: '#F59E0B' },
-  no: { ring: 'rgba(156,163,175,0.60)', tint: 'rgba(156,163,175,0.12)', label: '#6B7280', glow: '#9CA3AF' },
+// Per-status accents for the selected RSVP tile (ring / soft fill / label / glow).
+const RSVP_TONE: Record<string, { ring: string; fill: string; label: string; glow: string }> = {
+  in: { ring: '#34D399', fill: '#E9FBF2', label: '#15936B', glow: '#34D399' },
+  likely: { ring: '#F59E0B', fill: '#FEF5E5', label: '#B45309', glow: '#F59E0B' },
+  no: { ring: '#B6BCC5', fill: '#F1F2F4', label: '#6B7280', glow: '#C2C7CE' },
 }
 
 function formatPlanDate(dateStr?: string | null) {
@@ -946,37 +945,22 @@ export default function PlanDetail() {
                     onPress={() => setRsvpStatus(opt.key)}
                     style={{
                       flex: 1,
+                      alignItems: 'center',
+                      paddingVertical: 15,
                       borderRadius: 16,
+                      borderWidth: active ? 1.5 : 1,
+                      borderColor: active ? t.ring : 'rgba(0,0,0,0.08)',
+                      backgroundColor: active ? t.fill : '#FFFFFF',
                       shadowColor: active ? t.glow : '#000000',
-                      shadowOpacity: active ? 0.28 : 0.04,
-                      shadowRadius: active ? 14 : 4,
-                      shadowOffset: { width: 0, height: active ? 6 : 1 },
+                      shadowOpacity: active ? 0.22 : 0.04,
+                      shadowRadius: active ? 12 : 4,
+                      shadowOffset: { width: 0, height: active ? 5 : 1 },
                     }}
                   >
-                    {/* Surface — pale frosted glass + thin tone ring when selected, plain white otherwise. */}
-                    <View
-                      style={{
-                        position: 'absolute', left: 0, top: 0, right: 0, bottom: 0,
-                        borderRadius: 16, overflow: 'hidden',
-                        borderWidth: active ? 1.5 : 1,
-                        borderColor: active ? t.ring : 'rgba(0,0,0,0.08)',
-                        backgroundColor: active ? 'transparent' : '#FFFFFF',
-                      }}
-                    >
-                      {active && (
-                        <>
-                          <BlurView intensity={40} tint="light" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }} />
-                          <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: t.tint }} />
-                        </>
-                      )}
-                    </View>
-                    {/* Content */}
-                    <View style={{ alignItems: 'center', paddingVertical: 15 }}>
-                      <Text style={{ fontSize: active ? 26 : 22, marginBottom: 4 }}>{opt.emoji}</Text>
-                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, fontWeight: '700', color: active ? t.label : '#111111' }}>
-                        {opt.label}
-                      </Text>
-                    </View>
+                    <Text style={{ fontSize: active ? 26 : 22, marginBottom: 4 }}>{opt.emoji}</Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, fontWeight: '700', color: active ? t.label : '#111111' }}>
+                      {opt.label}
+                    </Text>
                   </Pressable>
                 )
               })}

@@ -5,25 +5,27 @@ import Animated, {
   useAnimatedStyle,
   interpolate,
   withTiming,
+  Easing,
   runOnJS,
   Extrapolation,
   type SharedValue,
 } from 'react-native-reanimated'
 
-// Dependency-free celebration: a burst of emoji pops up from the page centre
-// and rains down past the bottom, then fades. Driven by one shared progress
-// value on the UI thread. Mount it with a fresh `key` to (re)fire.
+// Dependency-free celebration: a shower of emoji falls from above the screen,
+// drifting + spinning, then fades. Driven by one shared progress value on the
+// UI thread. Mount with a fresh `key` to (re)fire. Particles start at staggered
+// heights above the top so they enter the page at different times — a natural
+// rain rather than a single burst.
 const FESTIVE = ['🎉', '✨', '🥳', '🔥', '🙌', '💫']
-const COUNT = 22
+const COUNT = 28
 
 type Particle = {
   startX: number
+  startY: number
   driftX: number
-  peak: number
   rotTurns: number
   size: number
   emoji: string
-  delay: number
 }
 
 export function EmojiBurst({ emojis, onDone }: { emojis: string[]; onDone?: () => void }) {
@@ -35,54 +37,49 @@ export function EmojiBurst({ emojis, onDone }: { emojis: string[]; onDone?: () =
     const arr: Particle[] = []
     for (let i = 0; i < COUNT; i++) {
       arr.push({
-        startX: width / 2 - 16 + (Math.random() - 0.5) * 90,
-        driftX: (Math.random() - 0.5) * 300,
-        peak: 260 + Math.random() * 190,
-        rotTurns: (Math.random() - 0.5) * 3,
-        size: 22 + Math.random() * 13,
+        startX: Math.random() * (width - 24),
+        startY: -40 - Math.random() * (height * 0.75), // staggered above the top
+        driftX: (Math.random() - 0.5) * 70,
+        rotTurns: (Math.random() - 0.5) * 4,
+        size: 20 + Math.random() * 13,
         emoji: pool[Math.floor(Math.random() * pool.length)],
-        delay: Math.random() * 0.12,
       })
     }
     return arr
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [width])
+  }, [width, height])
 
   useEffect(() => {
-    progress.value = withTiming(1, { duration: 1600 }, (fin) => {
+    progress.value = withTiming(1, { duration: 1900, easing: Easing.linear }, (fin) => {
       'worklet'
       if (fin && onDone) runOnJS(onDone)()
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const anchorY = height * 0.5
-
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 999 }}>
       {particles.map((p, i) => (
-        <EmojiParticle key={i} p={p} progress={progress} anchorY={anchorY} height={height} />
+        <EmojiParticle key={i} p={p} progress={progress} height={height} />
       ))}
     </View>
   )
 }
 
-function EmojiParticle({ p, progress, anchorY, height }: { p: Particle; progress: SharedValue<number>; anchorY: number; height: number }) {
+function EmojiParticle({ p, progress, height }: { p: Particle; progress: SharedValue<number>; height: number }) {
   const style = useAnimatedStyle(() => {
-    // Shift each particle by its own delay so they don't move in lockstep.
-    const t = Math.min(1, Math.max(0, (progress.value - p.delay) / (1 - p.delay)))
+    const t = progress.value
     return {
-      opacity: interpolate(t, [0, 0.1, 0.8, 1], [0, 1, 1, 0], Extrapolation.CLAMP),
+      opacity: interpolate(t, [0, 0.06, 0.85, 1], [0, 1, 1, 0], Extrapolation.CLAMP),
       transform: [
         { translateX: interpolate(t, [0, 1], [0, p.driftX], Extrapolation.CLAMP) },
-        { translateY: interpolate(t, [0, 0.3, 1], [40, -p.peak, height + 80], Extrapolation.CLAMP) },
+        { translateY: interpolate(t, [0, 1], [p.startY, height + 100], Extrapolation.CLAMP) },
         { rotate: `${interpolate(t, [0, 1], [0, p.rotTurns * 360], Extrapolation.CLAMP)}deg` },
-        { scale: interpolate(t, [0, 0.15, 1], [0.4, 1, 0.9], Extrapolation.CLAMP) },
       ],
     }
   })
   return (
-    <Animated.Text style={[{ position: 'absolute', left: p.startX, top: anchorY, fontSize: p.size }, style]}>
+    <Animated.Text style={[{ position: 'absolute', left: p.startX, top: 0, fontSize: p.size }, style]}>
       {p.emoji}
     </Animated.Text>
   )
