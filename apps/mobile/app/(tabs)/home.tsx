@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   Text,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { CaretDown, Check } from 'phosphor-react-native'
 import { useRouter } from 'expo-router'
+import * as Haptics from 'expo-haptics'
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -17,37 +17,27 @@ import Animated, {
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
-import { CrewPill } from '../../components/CrewPill'
 import { PlanCard, Plan } from '../../components/PlanCard'
-import { Pill } from '../../components/Pill'
 import { Loader } from '../../components/Loader'
 
-// Urgency score: pending RSVPs float to top, then tier (lower = more
-// important), then sooner date wins. Mirrors apps/web/src/screens/Home.jsx.
-function getPriorityScore(plan: Plan) {
-  let score = 0
-  if (!plan.my_rsvp) score += 1000
-  score += (4 - (plan.tier || 3)) * 100
-  const days = (new Date(plan.date).getTime() - Date.now()) / 86400000
-  score -= days
-  return score
+// Local YYYY-MM-DD — never via toISOString(), which is UTC and would mislabel
+// Today/Tomorrow near midnight in Dubai (UTC+4).
+function ymd(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const da = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${da}`
 }
 
-type SortMode = 'urgency' | 'time' | 'tier'
-
-type Group = {
-  id: string
-  name: string
-  emoji?: string | null
-  avg_attendance?: number | null
-  member_emojis?: string[]
-  member_count?: number
+function addDays(d: Date, n: number) {
+  const x = new Date(d)
+  x.setDate(x.getDate() + n)
+  return x
 }
 
-const sortLabel: Record<SortMode, string> = {
-  urgency: 'urgency',
-  time: 'date',
-  tier: 'tier',
+// Parse a YYYY-MM-DD as LOCAL noon so weekday/label math never TZ-shifts.
+function localNoon(dateStr: string) {
+  return new Date(`${dateStr}T12:00:00`)
 }
 
 export default function Home() {
@@ -56,25 +46,9 @@ export default function Home() {
   const { profile } = useAuth()
 
   const [plans, setPlans] = useState<Plan[]>([])
-  const [pastPlans, setPastPlans] = useState<Plan[]>([])
-  const [group, setGroup] = useState<Group | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [sortMode, setSortMode] = useState<SortMode>('urgency')
-  const [showSortSheet, setShowSortSheet] = useState(false)
-
-  const displayPlans = useMemo(() => {
-    const copy = [...plans]
-    if (sortMode === 'time') {
-      return copy.sort((a, b) => +new Date(a.date) - +new Date(b.date))
-    }
-    if (sortMode === 'tier') {
-      return copy.sort((a, b) =>
-        a.tier !== b.tier ? a.tier - b.tier : +new Date(a.date) - +new Date(b.date),
-      )
-    }
-    return copy.sort((a, b) => getPriorityScore(b) - getPriorityScore(a))
-  }, [plans, sortMode])
+  const [dayFilter, setDayFilter] = useState<string | 'all'>('all')
 
   useEffect(() => {
     loadData()
@@ -89,7 +63,7 @@ export default function Home() {
 
     const { data: membership } = await supabase
       .from('group_members')
-      .select('group_id, groups(*)')
+      .select('group_id')
       .eq('user_id', user.id)
       .single()
 
@@ -99,42 +73,7 @@ export default function Home() {
       return
     }
 
-    // First 4 member emojis for the crew pill
-    const { data: memberData } = await supabase
-      .from('group_members')
-      .select('profiles(emoji)')
-      .eq('group_id', groupId)
-      .limit(4)
-    const memberEmojis = (memberData || [])
-      .map((m: any) => m.profiles?.emoji)
-      .filter(Boolean)
-
-    // Total member count
-    const { count: memberCount } = await supabase
-      .from('group_members')
-      .select('*', { count: 'exact', head: true })
-      .eq('group_id', groupId)
-
-    // Average attendance across all scored members in this group
-    const { data: scoreData } = await supabase
-      .from('member_scores')
-      .select('attendance_rate')
-      .eq('group_id', groupId)
-    const rates = (scoreData || [])
-      .map((s: any) => s.attendance_rate)
-      .filter(Boolean) as number[]
-    const avg = rates.length > 0
-      ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length)
-      : null
-
-    setGroup({
-      ...(membership as any).groups,
-      avg_attendance: avg,
-      member_emojis: memberEmojis,
-      member_count: memberCount || memberEmojis.length,
-    })
-
-    // Upcoming plans the user is involved in (organising or invited).
+    // Upcoming OPEN plans the user is involved in (organising or invited).
     const today = new Date().toISOString().split('T')[0]
     const { data: upcomingData } = await supabase
       .from('plans')
@@ -165,16 +104,6 @@ export default function Home() {
       setPlans(enriched)
     }
 
-    // Past plans — flat compact rows
-    const { data: past } = await supabase
-      .from('plans')
-      .select('*')
-      .eq('group_id', groupId)
-      .eq('status', 'closed')
-      .order('date', { ascending: false })
-      .limit(3)
-    if (past) setPastPlans(past as Plan[])
-
     setLoading(false)
   }
 
@@ -184,12 +113,40 @@ export default function Home() {
     setRefreshing(false)
   }
 
-  const day = new Date().toLocaleDateString('en-AE', { weekday: 'long' })
+  // Optimistic inline RSVP — flips the card from buttons → status and recolours
+  // the day chip (amber → green) the instant the last reply on a day is cleared.
+  async function handleInlineRsvp(plan: Plan, status: 'in' | 'no') {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    setPlans((prev) => prev.map((p) => (p.id === plan.id ? { ...p, my_rsvp: status } : p)))
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { error } = await supabase
+      .from('rsvps')
+      .upsert({ plan_id: plan.id, user_id: user.id, status }, { onConflict: 'plan_id,user_id' })
+    if (error) {
+      // rollback
+      setPlans((prev) => prev.map((p) => (p.id === plan.id ? { ...p, my_rsvp: null } : p)))
+      return
+    }
+    // Notify the organiser (never self) — same RPC pattern as PlanDetail.
+    if (plan.organiser_id && plan.organiser_id !== user.id) {
+      try {
+        await supabase.rpc('create_notification', {
+          p_user_id: plan.organiser_id,
+          p_type: 'event_rsvp',
+          p_title: 'RSVP update',
+          p_body: `${profile?.display_name || 'Someone'} is ${status === 'in' ? 'in' : 'out'} for ${plan.name}`,
+          p_plan_id: plan.id,
+          p_actor_id: user.id,
+        })
+      } catch {}
+    }
+  }
+
   const firstName = profile?.display_name?.split(' ')[0] || 'there'
 
-  // scrollY drives AppHeader's glass fade-in. useAnimatedScrollHandler runs
-  // on the UI thread, so the glass opacity tracks the finger 1:1 with no
-  // JS bridge latency.
+  // scrollY drives AppHeader's glass. useAnimatedScrollHandler runs on the UI
+  // thread so the glass tracks the finger 1:1 with no JS bridge latency.
   const scrollY = useSharedValue(0)
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y
@@ -197,6 +154,45 @@ export default function Home() {
 
   // Top padding clears the AppHeader (insets.top + 52 row + 12 breathing).
   const headerPadTop = insets.top + APP_HEADER_ROW_HEIGHT + 12
+
+  // ---- Week window + day grouping (all client-side) ----
+  const now = new Date()
+  const todayStr = ymd(now)
+  const tomorrowStr = ymd(addDays(now, 1))
+  const weekEndStr = ymd(addDays(now, 7))
+
+  const weekPlans = plans.filter((p) => p.date >= todayStr && p.date <= weekEndStr)
+  const laterPlans = plans
+    .filter((p) => p.date > weekEndStr)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+
+  const byDate = new Map<string, Plan[]>()
+  weekPlans.forEach((p) => {
+    const arr = byDate.get(p.date)
+    if (arr) arr.push(p)
+    else byDate.set(p.date, [p])
+  })
+  const sortedDates = [...byDate.keys()].sort()
+
+  const dayHasReply = (dateStr: string) =>
+    (byDate.get(dateStr) || []).some((p) => !p.my_rsvp && p.status === 'open')
+
+  const totalNeedsReply = plans.filter((p) => !p.my_rsvp && p.status === 'open').length
+
+  function dayChipLabel(dateStr: string) {
+    if (dateStr === todayStr) return 'Today'
+    if (dateStr === tomorrowStr) return 'Tomorrow'
+    return localNoon(dateStr).toLocaleDateString('en-AE', { weekday: 'short' })
+  }
+
+  function dayHeaderLabel(dateStr: string) {
+    const wd = localNoon(dateStr).toLocaleDateString('en-AE', { weekday: 'short', day: 'numeric', month: 'short' })
+    const prefix = dateStr === todayStr ? 'Today' : dateStr === tomorrowStr ? 'Tomorrow' : ''
+    return prefix ? `${prefix} · ${wd}` : wd
+  }
+
+  const visibleDates = dayFilter === 'all' ? sortedDates : sortedDates.filter((d) => d === dayFilter)
+  const isEmpty = weekPlans.length === 0 && laterPlans.length === 0
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
@@ -211,79 +207,58 @@ export default function Home() {
           contentContainerStyle={{
             paddingTop: headerPadTop,
             // The translucent NativeTabs bar overlays the full-screen scroll
-            // content, so the last card would hide behind it. insets.bottom is
-            // only the home indicator (~34pt) — add ~72 to clear the bar.
+            // content. insets.bottom is only the home indicator (~34pt) — add
+            // ~72 so the last card clears the bar.
             paddingBottom: insets.bottom + 72,
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
           }
         >
-          {/* Greeting block — scrolls under the AppHeader glass as the user
-              moves down the feed. */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
+          {/* Greeting + one-line week summary (no crew pill). */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 14 }}>
             <Text
-              style={{
-                fontFamily: 'Inter_500Medium',
-                fontSize: 9,
-                color: '#BBBBBB',
-                letterSpacing: 0.8,
-                textTransform: 'uppercase',
-                marginBottom: 4,
-              }}
+              numberOfLines={1}
+              style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, fontWeight: '700', color: '#111111', letterSpacing: -0.4, lineHeight: 25 }}
             >
-              {day} · Dubai
+              Hey {firstName} {profile?.emoji || '👋'}
             </Text>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}>
-              <Text
-                style={{
-                  flexShrink: 1,
-                  fontFamily: 'PlusJakartaSans_700Bold',
-                  fontSize: 22,
-                  fontWeight: '700',
-                  color: '#111111',
-                  letterSpacing: -0.4,
-                  lineHeight: 25,
-                }}
-                numberOfLines={1}
-              >
-                Hey {firstName} {profile?.emoji || '👋'}
-              </Text>
-              {group && (
-                <CrewPill
-                  groupName={group.name}
-                  memberEmojis={group.member_emojis}
-                  avgAttendance={group.avg_attendance}
-                  onPress={() => router.push('/(tabs)/crew' as any)}
-                />
-              )}
-            </View>
-          </View>
-          {/* Coming up section header with sort chip */}
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingHorizontal: 20,
-              marginBottom: 10,
-            }}
-          >
-            <Text style={sectionLabelStyle}>Coming up</Text>
-            <Pressable onPress={() => setShowSortSheet(true)} hitSlop={6}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                <Text style={sectionLabelStyle}>Sort by: {sortLabel[sortMode]}</Text>
-                <CaretDown size={10} weight="bold" color="#BBBBBB" />
-              </View>
-            </Pressable>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: totalNeedsReply ? '#FB923C' : '#34D399', marginTop: 3 }}>
+              {totalNeedsReply > 0
+                ? `${totalNeedsReply} plan${totalNeedsReply > 1 ? 's' : ''} need your reply this week`
+                : "You're all caught up ✓"}
+            </Text>
           </View>
 
-          {displayPlans.length === 0 ? (
+          {/* Day filter chips: All + one per day-with-plans. */}
+          {weekPlans.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 14 }}
+            >
+              <DayChip
+                label="All"
+                count={weekPlans.length}
+                state="all"
+                selected={dayFilter === 'all'}
+                onPress={() => setDayFilter('all')}
+              />
+              {sortedDates.map((d) => (
+                <DayChip
+                  key={d}
+                  label={dayChipLabel(d)}
+                  count={(byDate.get(d) || []).length}
+                  state={dayHasReply(d) ? 'reply' : 'done'}
+                  selected={dayFilter === d}
+                  onPress={() => setDayFilter(d)}
+                />
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Feed */}
+          {isEmpty ? (
             <View
               style={{
                 marginHorizontal: 20,
@@ -302,224 +277,118 @@ export default function Home() {
               }}
             >
               <Text style={{ fontSize: 28, marginBottom: 8 }}>🎉</Text>
-              <Text
-                style={{
-                  fontFamily: 'PlusJakartaSans_800ExtraBold',
-                  fontSize: 13,
-                  fontWeight: '700',
-                  color: '#111111',
-                  marginBottom: 4,
-                }}
-              >
+              <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 4 }}>
                 No plans yet
               </Text>
-              <Text
-                style={{
-                  fontFamily: 'Inter_500Medium',
-                  fontSize: 12,
-                  color: '#AAAAAA',
-                  textAlign: 'center',
-                }}
-              >
-                Use the + button in the nav bar to plan something.
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', textAlign: 'center' }}>
+                Use the + Plan button up top to plan something.
               </Text>
             </View>
           ) : (
-            displayPlans.map((plan) => (
-              <PlanCard
-                key={plan.id}
-                plan={plan}
-                onPress={() => router.push(`/plan/${plan.id}` as any)}
-              />
-            ))
-          )}
-
-          {/* Past plans — flat rows */}
-          {pastPlans.length > 0 && (
             <>
-              <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginHorizontal: 20, marginVertical: 16 }} />
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingHorizontal: 20,
-                  marginBottom: 12,
-                }}
-              >
-                <Text style={sectionLabelStyle}>Last plans</Text>
-              </View>
-              {pastPlans.map((p) => (
-                <Pressable
-                  key={p.id}
-                  onPress={() => router.push(`/plan/${p.id}` as any)}
-                  // Static style — Pressable style-as-function drops styles
-                  // on iOS RN in this Expo SDK. Press feedback comes via
-                  // android_ripple / native default.
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingHorizontal: 20,
-                    paddingVertical: 10,
-                    borderBottomWidth: 1,
-                    borderBottomColor: 'rgba(0,0,0,0.04)',
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <View
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: '#E5E7EB',
-                      }}
+              {visibleDates.map((d) => (
+                <View key={d}>
+                  <Text style={dayHeaderStyle}>{dayHeaderLabel(d)}</Text>
+                  {(byDate.get(d) || []).map((plan) => (
+                    <PlanCard
+                      key={plan.id}
+                      plan={plan}
+                      onPress={() => router.push(`/plan/${plan.id}` as any)}
+                      onRsvp={(s) => handleInlineRsvp(plan, s)}
                     />
-                    <View>
-                      <Text
-                        style={{
-                          fontFamily: 'Inter_600SemiBold',
-                          fontSize: 13,
-                          color: '#555555',
-                        }}
-                      >
-                        {p.name}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: 'Inter_500Medium',
-                          fontSize: 11,
-                          color: '#AAAAAA',
-                          marginTop: 2,
-                        }}
-                      >
-                        {new Date(p.date).toLocaleDateString('en-AE', { day: 'numeric', month: 'short' })}
-                      </Text>
-                    </View>
-                  </View>
-                  <Pill variant="mint">Closed</Pill>
-                </Pressable>
+                  ))}
+                </View>
               ))}
+
+              {dayFilter === 'all' && laterPlans.length > 0 && (
+                <View>
+                  <Text style={dayHeaderStyle}>Later</Text>
+                  {laterPlans.map((plan) => (
+                    <PlanCard
+                      key={plan.id}
+                      plan={plan}
+                      onPress={() => router.push(`/plan/${plan.id}` as any)}
+                      onRsvp={(s) => handleInlineRsvp(plan, s)}
+                    />
+                  ))}
+                </View>
+              )}
             </>
           )}
         </Animated.ScrollView>
       )}
 
-      {/* AppHeader sits OVER the scroll view (zIndex 100). The wordmark
-          + "+ Plan" + bell are always visible; only the glass background
-          fades in as the user scrolls. Rendered after the scroll view so
-          it stacks on top. */}
+      {/* AppHeader sits OVER the scroll view — rendered after so it stacks on top. */}
       <AppHeader scrollY={scrollY} />
-
-      {/* Sort sheet */}
-      <Modal
-        visible={showSortSheet}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowSortSheet(false)}
-      >
-        <Pressable
-          onPress={() => setShowSortSheet(false)}
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            justifyContent: 'flex-end',
-          }}
-        >
-          <Pressable
-            // Stop propagation so taps inside the sheet don't dismiss it
-            onPress={(e) => e.stopPropagation?.()}
-            style={{
-              backgroundColor: '#FFFBF5',
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              paddingHorizontal: 20,
-              paddingTop: 16,
-              paddingBottom: Math.max(24, insets.bottom + 12),
-            }}
-          >
-            <View
-              style={{
-                width: 36,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: 'rgba(0,0,0,0.1)',
-                alignSelf: 'center',
-                marginBottom: 16,
-              }}
-            />
-            <Text
-              style={{
-                fontFamily: 'PlusJakartaSans_800ExtraBold',
-                fontSize: 16,
-                fontWeight: '800',
-                color: '#111111',
-                marginBottom: 12,
-              }}
-            >
-              Sort plans
-            </Text>
-
-            {(
-              [
-                { key: 'urgency' as const, label: 'Urgency', sub: 'Reply needed first, then tier + time', emoji: '⚡' },
-                { key: 'time' as const, label: 'Date', sub: 'Soonest plans first', emoji: '🗓️' },
-                { key: 'tier' as const, label: 'Tier', sub: 'Most important plans first', emoji: '🏆' },
-              ]
-            ).map((opt) => {
-              const active = sortMode === opt.key
-              return (
-                <Pressable
-                  key={opt.key}
-                  onPress={() => {
-                    setSortMode(opt.key)
-                    setShowSortSheet(false)
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: 14,
-                    borderRadius: 14,
-                    marginBottom: 6,
-                    backgroundColor: active ? 'rgba(251,146,60,0.08)' : 'rgba(255,255,255,0.8)',
-                    borderWidth: active ? 1.5 : 1,
-                    borderColor: active ? 'rgba(251,146,60,0.3)' : 'rgba(0,0,0,0.06)',
-                  }}
-                >
-                  <Text style={{ fontSize: 20 }}>{opt.emoji}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        fontFamily: 'PlusJakartaSans_700Bold',
-                        fontSize: 14,
-                        fontWeight: '700',
-                        color: '#111111',
-                        marginBottom: 2,
-                      }}
-                    >
-                      {opt.label}
-                    </Text>
-                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: '#AAAAAA' }}>
-                      {opt.sub}
-                    </Text>
-                  </View>
-                  {active && <Check size={18} weight="bold" color="#FB923C" />}
-                </Pressable>
-              )
-            })}
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   )
 }
 
-const sectionLabelStyle = {
+function DayChip({
+  label,
+  count,
+  state,
+  selected,
+  onPress,
+}: {
+  label: string
+  count: number
+  state: 'all' | 'reply' | 'done'
+  selected: boolean
+  onPress: () => void
+}) {
+  const countBg = selected
+    ? state === 'reply'
+      ? '#FB923C'
+      : state === 'done'
+        ? '#34D399'
+        : 'rgba(255,255,255,0.25)'
+    : state === 'reply'
+      ? '#FEF3C7'
+      : state === 'done'
+        ? '#DCFCE7'
+        : 'rgba(0,0,0,0.06)'
+  const countFg = selected
+    ? '#FFFFFF'
+    : state === 'reply'
+      ? '#B45309'
+      : state === 'done'
+        ? '#16A34A'
+        : '#888888'
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: selected ? '#111111' : '#FFFFFF',
+        borderWidth: 1,
+        borderColor: selected ? '#111111' : 'rgba(0,0,0,0.08)',
+        borderRadius: 999,
+        paddingVertical: 6,
+        paddingHorizontal: 11,
+        marginRight: 6,
+      }}
+    >
+      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, fontWeight: '700', color: selected ? '#FFFFFF' : '#555555' }}>
+        {label}
+      </Text>
+      <View style={{ minWidth: 15, height: 15, paddingHorizontal: 3, borderRadius: 999, backgroundColor: countBg, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 8, fontWeight: '800', color: countFg }}>{count}</Text>
+      </View>
+    </Pressable>
+  )
+}
+
+const dayHeaderStyle = {
   fontFamily: 'Inter_700Bold' as const,
-  fontSize: 9,
+  fontSize: 8,
   fontWeight: '700' as const,
   letterSpacing: 0.8,
   textTransform: 'uppercase' as const,
-  color: '#BBBBBB',
+  color: '#CCCCCC',
+  paddingHorizontal: 20,
+  paddingTop: 6,
+  paddingBottom: 4,
 }
