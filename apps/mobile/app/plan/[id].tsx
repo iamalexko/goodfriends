@@ -24,9 +24,9 @@ const HERO_H = 240
 // RSVP options + selected styling — mirrors apps/web/src/screens/PlanDetail.jsx
 // exactly (pastel fill + coloured border + soft glow; ink label + grey sub).
 const RSVP_OPTIONS = [
-  { key: 'in', emoji: '✅', label: "I'm in", sub: '100% there', activeBg: '#EAF6F0', activeBorder: '#3D9970', activeSub: '#3D9970' },
-  { key: 'likely', emoji: '🤔', label: 'Likely', sub: 'pretty sure', activeBg: '#FBF1DD', activeBorder: '#D9A441', activeSub: '#B07B16' },
-  { key: 'no', emoji: '😬', label: 'No', sub: "can't make it", activeBg: '#F3F4F6', activeBorder: '#9CA3AF', activeSub: '#6B7280' },
+  { key: 'in', emoji: '✅', label: "I'm in", sub: '100% there', activeBg: '#DCFCE7', activeBorder: '#16A34A', glow: '#16A34A' },
+  { key: 'likely', emoji: '🤔', label: 'Likely', sub: 'pretty sure', activeBg: '#FEF3C7', activeBorder: '#F59E0B', glow: '#F59E0B' },
+  { key: 'no', emoji: '😬', label: 'No', sub: "can't make it", activeBg: '#F3F4F6', activeBorder: '#9CA3AF', glow: '#9CA3AF' },
 ] as const
 
 const RSVP_LABEL: Record<string, string> = { in: "I'm in", likely: 'Likely', no: 'No' }
@@ -953,19 +953,23 @@ export default function PlanDetail() {
                     style={{
                       flex: 1,
                       alignItems: 'center',
-                      paddingVertical: 11,
-                      paddingHorizontal: 6,
+                      paddingVertical: 14,
+                      paddingHorizontal: 8,
                       borderRadius: 14,
-                      borderWidth: active ? 2 : 1,
-                      borderColor: active ? opt.activeBorder : 'rgba(0,0,0,0.07)',
-                      backgroundColor: active ? opt.activeBg : '#FFFFFF',
+                      borderWidth: active ? 1.5 : 1,
+                      borderColor: active ? opt.activeBorder : 'rgba(255,255,255,0.95)',
+                      backgroundColor: active ? opt.activeBg : 'rgba(255,255,255,0.65)',
+                      shadowColor: active ? opt.glow : '#000000',
+                      shadowOpacity: active ? 0.18 : 0.05,
+                      shadowRadius: active ? 12 : 6,
+                      shadowOffset: { width: 0, height: 2 },
                     }}
                   >
-                    <Text style={{ fontSize: 20, marginBottom: 3 }}>{opt.emoji}</Text>
+                    <Text style={{ fontSize: 24, marginBottom: 4 }}>{opt.emoji}</Text>
                     <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 12, fontWeight: '800', color: '#111111' }}>
                       {opt.label}
                     </Text>
-                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 9, color: active ? opt.activeSub : '#AAAAAA', marginTop: 1 }}>
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 10, color: '#AAAAAA', marginTop: 2 }}>
                       {opt.sub}
                     </Text>
                   </Pressable>
