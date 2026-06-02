@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -24,9 +24,9 @@ const HERO_H = 240
 // RSVP options + selected styling — mirrors apps/web/src/screens/PlanDetail.jsx
 // exactly (pastel fill + coloured border + soft glow; ink label + grey sub).
 const RSVP_OPTIONS = [
-  { key: 'in', emoji: '✅', label: "I'm in", sub: '100% there', activeBg: '#DCFCE7', activeBorder: '#16A34A', glow: '#16A34A' },
-  { key: 'likely', emoji: '🤔', label: 'Likely', sub: 'pretty sure', activeBg: '#FEF3C7', activeBorder: '#F59E0B', glow: '#F59E0B' },
-  { key: 'no', emoji: '😬', label: 'No', sub: "can't make it", activeBg: '#F3F4F6', activeBorder: '#9CA3AF', glow: '#9CA3AF' },
+  { key: 'in', emoji: '✅', label: "I'm in", sub: '100% there', activeBg: '#EAF6F0', activeBorder: '#3D9970', activeSub: '#3D9970' },
+  { key: 'likely', emoji: '🤔', label: 'Likely', sub: 'pretty sure', activeBg: '#FBF1DD', activeBorder: '#D9A441', activeSub: '#B07B16' },
+  { key: 'no', emoji: '😬', label: 'No', sub: "can't make it", activeBg: '#F3F4F6', activeBorder: '#9CA3AF', activeSub: '#6B7280' },
 ] as const
 
 const RSVP_LABEL: Record<string, string> = { in: "I'm in", likely: 'Likely', no: 'No' }
@@ -40,6 +40,16 @@ const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶', '❓']
 function formatPlanDate(dateStr?: string | null) {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleDateString('en-AE', { weekday: 'long', day: 'numeric', month: 'short' })
+}
+
+// "HH:MM" (24h, as stored) → "1:30 PM".
+function formatTime12(t?: string | null) {
+  if (!t) return ''
+  const [h, m] = t.split(':').map((n) => parseInt(n, 10))
+  if (Number.isNaN(h)) return t
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${String(Number.isNaN(m) ? 0 : m).padStart(2, '0')} ${ampm}`
 }
 
 // Compact "2h" / "3d" relative time for Moments post headers.
@@ -157,6 +167,7 @@ export default function PlanDetail() {
   const [guestSheetOpen, setGuestSheetOpen] = useState(false)
   const [coverSheetOpen, setCoverSheetOpen] = useState(false)
   const [coverBusy, setCoverBusy] = useState(false)
+  const [organiserMenuOpen, setOrganiserMenuOpen] = useState(false)
 
   // Parallax — scrollY drives the hero translate/scale (UI thread)
   const scrollY = useSharedValue(0)
@@ -814,15 +825,15 @@ export default function PlanDetail() {
   const partyEmojis = [...new Set(['🎉', '✨', '🥳', '🔥', '🙌', '💫', ...(rsvps.map((r) => r.profiles?.emoji).filter(Boolean) as string[])])]
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#FFFBF5' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar style="light" />
 
       <Animated.ScrollView
+        style={{ flex: 1 }}
         onScroll={onScroll}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-        contentContainerStyle={{ paddingBottom: Math.max(40, insets.bottom + 24) }}
+        contentContainerStyle={{ paddingBottom: Math.max(28, insets.bottom + 16) }}
       >
         {/* ===== SLICE A — Parallax cover hero ===== */}
         <View style={{ height: HERO_H, overflow: 'hidden', backgroundColor: '#1A1A1A' }}>
@@ -863,7 +874,7 @@ export default function PlanDetail() {
                 ))}
               </Pressable>
             )}
-            <Pressable onPress={() => setPlanReactorOpen(true)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: myPlanReaction ? '#FB923C' : 'rgba(0,0,0,0.42)', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable onPress={() => setPlanReactorOpen(true)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: myPlanReaction ? '#E2683F' : 'rgba(0,0,0,0.42)', alignItems: 'center', justifyContent: 'center' }}>
               {myPlanReaction ? <Text style={{ fontSize: 17 }}>{myPlanReaction}</Text> : <Smiley size={19} weight="fill" color="#FFFFFF" />}
             </Pressable>
           </View>
@@ -877,33 +888,33 @@ export default function PlanDetail() {
             <View style={{ marginBottom: 12 }}><Pill variant="neutral">Closed</Pill></View>
           )}
 
-          {/* ===== SLICE B — Meta chips (When / Where→Maps) ===== */}
-          <Animated.View entering={FadeInDown.duration(440).delay(60)} style={{ flexDirection: 'row', gap: 10 }}>
+          {/* ===== Meta chips — full-width stacked (When / Where→Maps) ===== */}
+          <Animated.View entering={FadeInDown.duration(440).delay(60)} style={{ gap: 9 }}>
             <View style={CHIP}>
-              <View style={CHIP_ICON}><CalendarBlank size={15} weight="fill" color="#FB923C" /></View>
+              <View style={CHIP_ICON}><CalendarBlank size={16} weight="fill" color="#E2683F" /></View>
               <View style={{ flex: 1 }}>
-                <Text style={CHIP_LABEL}>WHEN</Text>
-                <Text style={CHIP_VALUE} numberOfLines={1}>{formatPlanDate(plan.date)}{plan.time ? ` · ${plan.time}` : ''}</Text>
+                <Text style={CHIP_LABEL}>When</Text>
+                <Text style={CHIP_VALUE}>{formatPlanDate(plan.date)}{plan.time ? ` · ${formatTime12(plan.time)}` : ''}</Text>
               </View>
             </View>
             {plan.location ? (
               <Pressable style={CHIP} onPress={() => openMaps(plan.location!)}>
-                <View style={CHIP_ICON}><MapPin size={15} weight="fill" color="#FB923C" /></View>
+                <View style={CHIP_ICON}><MapPin size={16} weight="fill" color="#E2683F" /></View>
                 <View style={{ flex: 1 }}>
-                  <Text style={CHIP_LABEL}>WHERE</Text>
-                  <Text style={CHIP_VALUE} numberOfLines={1}>{plan.location}</Text>
+                  <Text style={CHIP_LABEL}>Where</Text>
+                  <Text style={CHIP_VALUE} numberOfLines={2}>{plan.location}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, fontWeight: '700', color: '#FB923C' }}>Maps</Text>
-                  <ArrowSquareOut size={11} weight="bold" color="#FB923C" />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FBEAE3', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 }}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, fontWeight: '700', color: '#A23E1F' }}>Maps</Text>
+                  <ArrowSquareOut size={11} weight="bold" color="#A23E1F" />
                 </View>
               </Pressable>
             ) : (
               <View style={CHIP}>
-                <View style={CHIP_ICON}><MapPin size={15} weight="regular" color="#CCCCCC" /></View>
+                <View style={CHIP_ICON}><MapPin size={16} weight="regular" color="#CCCCCC" /></View>
                 <View style={{ flex: 1 }}>
-                  <Text style={CHIP_LABEL}>WHERE</Text>
-                  <Text style={[CHIP_VALUE, { color: '#BBBBBB' }]} numberOfLines={1}>Location TBD</Text>
+                  <Text style={CHIP_LABEL}>Where</Text>
+                  <Text style={[CHIP_VALUE, { color: '#BBBBBB' }]}>Location TBD</Text>
                 </View>
               </View>
             )}
@@ -917,7 +928,7 @@ export default function PlanDetail() {
             </Text>
           </View>
 
-          {/* ===== SLICE B — "The plan" callout (notes, all tiers) ===== */}
+          {/* ===== "The plan" callout (notes, all tiers) ===== */}
           {plan.notes ? (
             <View style={{ marginTop: 12, backgroundColor: '#FFF8EF', borderWidth: 1, borderColor: '#FCE4C4', borderRadius: 14, padding: 13 }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 8, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: '#C2843A', marginBottom: 4 }}>✨ The plan</Text>
@@ -925,9 +936,12 @@ export default function PlanDetail() {
             </View>
           ) : null}
 
+          {/* Section break */}
+          <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginTop: 16 }} />
+
           {/* RSVP selector */}
         {!isClosed && (
-          <Animated.View entering={FadeInDown.duration(440).delay(140)} style={{ marginTop: 24 }}>
+          <Animated.View entering={FadeInDown.duration(440).delay(140)} style={{ marginTop: 16 }}>
             <Text style={SECTION_LABEL}>Your RSVP</Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {RSVP_OPTIONS.map((opt) => {
@@ -939,23 +953,19 @@ export default function PlanDetail() {
                     style={{
                       flex: 1,
                       alignItems: 'center',
-                      paddingVertical: 14,
-                      paddingHorizontal: 8,
+                      paddingVertical: 11,
+                      paddingHorizontal: 6,
                       borderRadius: 14,
-                      borderWidth: active ? 1.5 : 1,
-                      borderColor: active ? opt.activeBorder : 'rgba(255,255,255,0.95)',
-                      backgroundColor: active ? opt.activeBg : 'rgba(255,255,255,0.65)',
-                      shadowColor: active ? opt.glow : '#000000',
-                      shadowOpacity: active ? 0.18 : 0.05,
-                      shadowRadius: active ? 12 : 6,
-                      shadowOffset: { width: 0, height: 2 },
+                      borderWidth: active ? 2 : 1,
+                      borderColor: active ? opt.activeBorder : 'rgba(0,0,0,0.07)',
+                      backgroundColor: active ? opt.activeBg : '#FFFFFF',
                     }}
                   >
-                    <Text style={{ fontSize: 24, marginBottom: 4 }}>{opt.emoji}</Text>
+                    <Text style={{ fontSize: 20, marginBottom: 3 }}>{opt.emoji}</Text>
                     <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 12, fontWeight: '800', color: '#111111' }}>
                       {opt.label}
                     </Text>
-                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 10, color: '#AAAAAA', marginTop: 2 }}>
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 9, color: active ? opt.activeSub : '#AAAAAA', marginTop: 1 }}>
                       {opt.sub}
                     </Text>
                   </Pressable>
@@ -966,7 +976,7 @@ export default function PlanDetail() {
         )}
 
         {/* ===== SLICE D — Guest summary (full roster in a sheet) ===== */}
-        <Animated.View entering={FadeInDown.duration(440).delay(220)} style={{ marginTop: 26 }}>
+        <Animated.View entering={FadeInDown.duration(440).delay(220)} style={{ marginTop: 18 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <Text style={[SECTION_LABEL, { marginBottom: 0 }]}>Who's coming</Text>
             {isOrganiser && pendingRequests.length > 0 && (
@@ -979,7 +989,7 @@ export default function PlanDetail() {
           </View>
 
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            {([['in', 'In', '#34D399'], ['likely', 'Likely', '#F59E0B'], ['no', 'Out', '#9CA3AF'], ['noReply', 'No reply', '#B6BDC6']] as const).map(([k, label, color]) => (
+            {([['in', 'In', '#3D9970'], ['likely', 'Likely', '#D9A441'], ['no', 'Out', '#9CA3AF'], ['noReply', 'No reply', '#B6BDC6']] as const).map(([k, label, color]) => (
               <View key={k} style={{ flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderRadius: 14, paddingVertical: 10, alignItems: 'center' }}>
                 <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color }}>{guestCounts[k]}</Text>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 9, fontWeight: '600', color: '#AAAAAA', marginTop: 1 }}>{label}</Text>
@@ -994,7 +1004,7 @@ export default function PlanDetail() {
                 ? `${inGuests[0].profiles?.display_name?.split(' ')[0] || 'Someone'}${inGuests.length > 1 ? ` + ${inGuests.length - 1}` : ''} coming`
                 : sortedRsvps.length ? 'No one in yet' : 'No one invited yet'}
             </Text>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#FB923C' }}>See all →</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#A23E1F' }}>See all →</Text>
           </Pressable>
         </Animated.View>
 
@@ -1025,66 +1035,8 @@ export default function PlanDetail() {
 
         {/* Moments — crew-only photo + comment feed */}
         {canViewMoments && (
-          <View style={{ marginTop: 28 }}>
+          <View style={{ marginTop: 18 }}>
             <Text style={SECTION_LABEL}>Moments</Text>
-
-            {/* ===== SLICE E1 — Unified one-line composer ===== */}
-            {editingPost && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 6 }}>
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#F59E0B' }}>Editing comment…</Text>
-                <Pressable onPress={cancelEditing} hitSlop={8}>
-                  <X size={14} weight="bold" color="#AAAAAA" />
-                </Pressable>
-              </View>
-            )}
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                borderWidth: 1,
-                borderColor: composerText.trim() || composerPhoto ? '#FB923C' : 'rgba(0,0,0,0.1)',
-                borderRadius: 999,
-                backgroundColor: '#FFFFFF',
-                paddingLeft: 8,
-                paddingRight: 6,
-                paddingVertical: 6,
-              }}
-            >
-              <EmojiAvatar emoji={profile?.emoji || '😎'} size="sm" />
-              {composerPhoto && (
-                <View style={{ width: 34, height: 34, borderRadius: 8, overflow: 'hidden' }}>
-                  <Image source={{ uri: composerPhoto.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                  <Pressable onPress={removeComposerPhoto} style={{ position: 'absolute', top: 1, right: 1, width: 14, height: 14, borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
-                    <X size={8} weight="bold" color="#FFFFFF" />
-                  </Pressable>
-                </View>
-              )}
-              <TextInput
-                ref={composerInputRef}
-                value={composerText}
-                onChangeText={setComposerText}
-                placeholder={composerPhoto ? 'Add a caption…' : 'Add a moment…'}
-                placeholderTextColor="#BBBBBB"
-                style={{ flex: 1, fontFamily: 'Inter_500Medium', fontSize: 14, color: '#111111', paddingVertical: 4 }}
-              />
-              {!editingPost && (
-                <Pressable onPress={pickPhoto} hitSlop={6} style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
-                  <Camera size={18} weight="regular" color="#888888" />
-                </Pressable>
-              )}
-              <Pressable
-                onPress={submitPost}
-                disabled={uploading || (!composerText.trim() && !composerPhoto)}
-                style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: composerText.trim() || composerPhoto ? '#111111' : '#E5E7EB' }}
-              >
-                {uploading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <PaperPlaneTilt size={16} weight="fill" color={composerText.trim() || composerPhoto ? '#FFFFFF' : '#AAAAAA'} />
-                )}
-              </Pressable>
-            </View>
 
             {/* Uploading skeleton */}
             {uploading && composerPhoto && (
@@ -1125,7 +1077,7 @@ export default function PlanDetail() {
                         <Pressable
                           key={emoji}
                           onPress={() => toggleReaction(post, emoji)}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: mine ? '#FEF3C7' : 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: mine ? '#FB923C' : 'rgba(0,0,0,0.08)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: mine ? '#FBEAE3' : 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: mine ? '#E2683F' : 'rgba(0,0,0,0.08)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}
                         >
                           <Text style={{ fontSize: 12 }}>{emoji}</Text>
                           <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#555555' }}>{count}</Text>
@@ -1217,7 +1169,7 @@ export default function PlanDetail() {
           <Pressable
             onPress={openClose}
             style={{
-              marginTop: 28,
+              marginTop: 20,
               backgroundColor: '#111111',
               borderRadius: 999,
               paddingVertical: 16,
@@ -1241,21 +1193,52 @@ export default function PlanDetail() {
         </View>
       </Animated.ScrollView>
 
-      {/* ===== Floating controls (over the scroll, don't scroll away) ===== */}
+      {/* ===== Floating composer pinned to the bottom (crew-only) ===== */}
+      {canViewMoments && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: Math.max(10, insets.bottom + 4), backgroundColor: 'rgba(255,251,245,0.97)', borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' }}>
+          {editingPost && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 6 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#B07B16' }}>Editing comment…</Text>
+              <Pressable onPress={cancelEditing} hitSlop={8}><X size={14} weight="bold" color="#AAAAAA" /></Pressable>
+            </View>
+          )}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: composerText.trim() || composerPhoto ? '#E2683F' : 'rgba(0,0,0,0.1)', borderRadius: 999, backgroundColor: '#FFFFFF', paddingLeft: 8, paddingRight: 6, paddingVertical: 6 }}>
+            <EmojiAvatar emoji={profile?.emoji || '😎'} size="sm" />
+            {composerPhoto && (
+              <View style={{ width: 34, height: 34, borderRadius: 8, overflow: 'hidden' }}>
+                <Image source={{ uri: composerPhoto.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                <Pressable onPress={removeComposerPhoto} style={{ position: 'absolute', top: 1, right: 1, width: 14, height: 14, borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
+                  <X size={8} weight="bold" color="#FFFFFF" />
+                </Pressable>
+              </View>
+            )}
+            <TextInput
+              ref={composerInputRef}
+              value={composerText}
+              onChangeText={setComposerText}
+              placeholder={composerPhoto ? 'Add a caption…' : 'Add a moment…'}
+              placeholderTextColor="#BBBBBB"
+              style={{ flex: 1, fontFamily: 'Inter_500Medium', fontSize: 14, color: '#111111', paddingVertical: 4 }}
+            />
+            {!editingPost && (
+              <Pressable onPress={pickPhoto} hitSlop={6} style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+                <Camera size={18} weight="regular" color="#888888" />
+              </Pressable>
+            )}
+            <Pressable onPress={submitPost} disabled={uploading || (!composerText.trim() && !composerPhoto)} style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: composerText.trim() || composerPhoto ? '#111111' : '#E5E7EB' }}>
+              {uploading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <PaperPlaneTilt size={16} weight="fill" color={composerText.trim() || composerPhoto ? '#FFFFFF' : '#AAAAAA'} />}
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* ===== Floating controls (over the scroll) ===== */}
       <FloatingBack onPress={goBack} insets={insets} />
-      <View style={{ position: 'absolute', top: insets.top + 6, right: 14, flexDirection: 'row', gap: 8 }}>
-        {isOrganiser && !isClosed && (
-          <Pressable onPress={openEdit} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}>
-            <PencilSimple size={16} weight="bold" color="#FFFFFF" />
-          </Pressable>
-        )}
-        {isOrganiser && (
-          <Pressable onPress={() => setCoverSheetOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, height: 38, borderRadius: 19, paddingHorizontal: 13, backgroundColor: 'rgba(0,0,0,0.4)' }}>
-            <Camera size={14} weight="fill" color="#FFFFFF" />
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>Change</Text>
-          </Pressable>
-        )}
-      </View>
+      {isOrganiser && (
+        <Pressable onPress={() => setOrganiserMenuOpen(true)} style={{ position: 'absolute', top: insets.top + 6, right: 14, width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}>
+          <DotsThree size={20} weight="bold" color="#FFFFFF" />
+        </Pressable>
+      )}
 
       {/* ---- Edit modal ---- */}
       <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => !savingEdit && setEditOpen(false)}>
@@ -1422,7 +1405,7 @@ export default function PlanDetail() {
               {REACTION_OPTIONS.map((e) => {
                 const sel = myPlanReaction === e
                 return (
-                  <Pressable key={e} onPress={() => setPlanReaction(e)} style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: sel ? '#FEF3C7' : 'rgba(0,0,0,0.04)', borderWidth: sel ? 1.5 : 0, borderColor: '#FB923C' }}>
+                  <Pressable key={e} onPress={() => setPlanReaction(e)} style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: sel ? '#FBEAE3' : 'rgba(0,0,0,0.04)', borderWidth: sel ? 1.5 : 0, borderColor: '#E2683F' }}>
                     <Text style={{ fontSize: 24 }}>{e}</Text>
                   </Pressable>
                 )
@@ -1501,7 +1484,7 @@ export default function PlanDetail() {
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 14 }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111' }}>Change cover</Text>
-              {coverBusy && <ActivityIndicator color="#FB923C" />}
+              {coverBusy && <ActivityIndicator color="#E2683F" />}
             </View>
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
               <Text style={FIELD_LABEL}>Upload or pick a colour</Text>
@@ -1543,9 +1526,32 @@ export default function PlanDetail() {
         </Pressable>
       </Modal>
 
+      {/* ---- Organiser action menu (hero ⋯) ---- */}
+      <Modal visible={organiserMenuOpen} transparent animationType="slide" onRequestClose={() => setOrganiserMenuOpen(false)}>
+        <Pressable onPress={() => setOrganiserMenuOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12, paddingBottom: Math.max(24, insets.bottom + 12), paddingHorizontal: 12 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 12 }} />
+            {!isClosed && (
+              <Pressable onPress={() => { setOrganiserMenuOpen(false); openEdit() }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' }}>
+                  <PencilSimple size={16} weight="bold" color="#111111" />
+                </View>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#111111' }}>Edit details</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={() => { setOrganiserMenuOpen(false); setCoverSheetOpen(true) }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FBEAE3', alignItems: 'center', justifyContent: 'center' }}>
+                <Camera size={16} weight="fill" color="#E2683F" />
+              </View>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#111111' }}>Change cover</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* "I'm in" celebration — spans the whole page over everything. */}
       {burstKey > 0 && <EmojiBurst key={burstKey} emojis={partyEmojis} />}
-    </View>
+    </KeyboardAvoidingView>
   )
 }
 
@@ -1598,27 +1604,27 @@ const SECTION_LABEL = {
   marginBottom: 12,
 }
 
+// Full-width stacked meta chips (When / Where), clay-tinted icon tiles.
 const CHIP = {
-  flex: 1,
   flexDirection: 'row' as const,
   alignItems: 'center' as const,
-  gap: 8,
+  gap: 11,
   backgroundColor: '#FFFFFF',
   borderWidth: 1,
   borderColor: 'rgba(0,0,0,0.06)',
   borderRadius: 14,
-  paddingHorizontal: 11,
-  paddingVertical: 10,
+  paddingHorizontal: 12,
+  paddingVertical: 11,
   shadowColor: '#000',
   shadowOffset: { width: 0, height: 1 },
   shadowOpacity: 0.04,
   shadowRadius: 4,
 }
 const CHIP_ICON = {
-  width: 28,
-  height: 28,
-  borderRadius: 9,
-  backgroundColor: '#FFF3E6',
+  width: 38,
+  height: 38,
+  borderRadius: 11,
+  backgroundColor: '#FBEAE3',
   alignItems: 'center' as const,
   justifyContent: 'center' as const,
 }
@@ -1626,13 +1632,15 @@ const CHIP_LABEL = {
   fontFamily: 'Inter_700Bold' as const,
   fontSize: 8,
   fontWeight: '700' as const,
-  letterSpacing: 0.6,
+  letterSpacing: 0.7,
+  textTransform: 'uppercase' as const,
   color: '#BBBBBB',
-  marginBottom: 1,
+  marginBottom: 2,
 }
 const CHIP_VALUE = {
-  fontFamily: 'Inter_600SemiBold' as const,
-  fontSize: 12,
+  fontFamily: 'Inter_700Bold' as const,
+  fontSize: 14,
+  fontWeight: '700' as const,
   color: '#111111',
 }
 
