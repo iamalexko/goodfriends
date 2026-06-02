@@ -118,8 +118,10 @@ export default function Plans() {
           scrollEventThrottle={16}
           contentContainerStyle={{
             paddingTop: headerPadTop,
-            // NativeTabs handles bottom insets automatically.
-            paddingBottom: 24,
+            // The translucent NativeTabs bar overlays the full-screen scroll
+            // content. insets.bottom is only the home indicator (~34pt) — add
+            // ~72 so the last row clears the bar.
+            paddingBottom: insets.bottom + 72,
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />

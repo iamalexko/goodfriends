@@ -210,9 +210,10 @@ export default function Home() {
           scrollEventThrottle={16}
           contentContainerStyle={{
             paddingTop: headerPadTop,
-            // NativeTabs handles bottom insets automatically for the first
-            // ScrollView in each tab screen. Small buffer below the last card.
-            paddingBottom: 24,
+            // The translucent NativeTabs bar overlays the full-screen scroll
+            // content, so the last card would hide behind it. insets.bottom is
+            // only the home indicator (~34pt) — add ~72 to clear the bar.
+            paddingBottom: insets.bottom + 72,
           }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
