@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Image, Pressable, RefreshControl, Text, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Image, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { MapPin, Camera } from 'phosphor-react-native'
@@ -157,6 +157,19 @@ export default function Plans() {
   const headerPadTop = insets.top + APP_HEADER_ROW_HEIGHT + 12
   const todayStr = ymd(new Date())
 
+  // Horizontal pager — Upcoming (page 0) / Past (page 1). Tapping a tab scrolls
+  // to it; swiping the content settles onto the nearest page and syncs the tab.
+  const { width } = useWindowDimensions()
+  const pagerRef = useRef<ScrollView>(null)
+  function goToTab(id: Tab) {
+    setTab(id)
+    pagerRef.current?.scrollTo({ x: id === 'past' ? width : 0, animated: true })
+  }
+  function onPagerSettle(e: { nativeEvent: { contentOffset: { x: number } } }) {
+    const next: Tab = Math.round(e.nativeEvent.contentOffset.x / Math.max(1, width)) === 1 ? 'past' : 'upcoming'
+    if (next !== tab) setTab(next)
+  }
+
   // Upcoming → day-grouped agenda (ascending).
   const upcomingDays: { dateStr: string; plans: Plan[] }[] = (() => {
     const m = new Map<string, Plan[]>()
@@ -181,6 +194,51 @@ export default function Plans() {
     return [...m.keys()].map((k) => ({ key: k, plans: m.get(k)! }))
   })()
 
+  const upcomingBody =
+    upcoming.length === 0 ? (
+      <EmptyUpcoming onCreate={() => router.push('/create' as any)} />
+    ) : (
+      upcomingDays.map((day, i) => (
+        <AgendaDay
+          key={day.dateStr}
+          dateStr={day.dateStr}
+          plans={day.plans}
+          isToday={day.dateStr === todayStr}
+          isLast={i === upcomingDays.length - 1}
+          onOpen={(id) => router.push(`/plan/${id}` as any)}
+        />
+      ))
+    )
+
+  const pastBody =
+    past.length === 0 ? (
+      <EmptyPast />
+    ) : (
+      pastMonths.map((month) => {
+        const stat = monthStat(month.plans)
+        return (
+          <View key={month.key}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 }}>
+              <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 13, fontWeight: '800', color: '#111111' }}>
+                {monthLabel(month.key)}
+              </Text>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 9, color: '#AAAAAA' }}>
+                {stat.count} plan{stat.count > 1 ? 's' : ''}
+                {stat.rate != null ? ` · ${stat.rate}% showed` : ''}
+              </Text>
+            </View>
+            {month.plans.map((p) =>
+              p.status === 'cancelled' ? (
+                <CancelledRow key={p.id} plan={p} onPress={() => router.push(`/plan/${p.id}` as any)} />
+              ) : (
+                <MemoryCard key={p.id} plan={p} onPress={() => router.push(`/plan/${p.id}` as any)} />
+              ),
+            )}
+          </View>
+        )
+      })
+    )
+
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
       {loading ? (
@@ -188,92 +246,71 @@ export default function Plans() {
           <Loader />
         </View>
       ) : (
-        <Animated.ScrollView
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          contentContainerStyle={{
-            paddingTop: headerPadTop,
-            paddingBottom: insets.bottom + 72,
-          }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
-          }
-        >
-          {/* Hero */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}>
-            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 32, fontWeight: '800', color: '#111111', letterSpacing: -1, lineHeight: 32 }}>
-              Plans.
-            </Text>
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', marginTop: 4 }}>
-              {tab === 'upcoming' ? "everything you've said yes to" : 'your time machine 📸'}
-            </Text>
+        <View style={{ flex: 1 }}>
+          {/* Fixed header — hero + tab toggle stay put while the content pages. */}
+          <View style={{ paddingTop: headerPadTop }}>
+            <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}>
+              <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 32, fontWeight: '800', color: '#111111', letterSpacing: -1, lineHeight: 32 }}>
+                Plans.
+              </Text>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', marginTop: 4 }}>
+                {tab === 'upcoming' ? "everything you've said yes to" : 'your time machine 📸'}
+              </Text>
+            </View>
+
+            <View style={{ paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)', flexDirection: 'row' }}>
+              {([
+                { id: 'upcoming' as const, label: 'Upcoming' },
+                { id: 'past' as const, label: 'Past' },
+              ]).map((t) => {
+                const active = tab === t.id
+                return (
+                  <Pressable key={t.id} onPress={() => goToTab(t.id)} style={{ paddingHorizontal: 16, paddingVertical: 10, position: 'relative' }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, fontWeight: '700', color: active ? '#111111' : '#BBBBBB' }}>
+                      {t.label}
+                    </Text>
+                    {active && (
+                      <View style={{ position: 'absolute', left: 0, right: 0, bottom: -1, height: 2, backgroundColor: '#FB923C' }} />
+                    )}
+                  </Pressable>
+                )
+              })}
+            </View>
           </View>
 
-          {/* Tab toggle */}
-          <View style={{ paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)', flexDirection: 'row' }}>
-            {([
-              { id: 'upcoming' as const, label: 'Upcoming' },
-              { id: 'past' as const, label: 'Past' },
-            ]).map((t) => {
-              const active = tab === t.id
-              return (
-                <Pressable key={t.id} onPress={() => setTab(t.id)} style={{ paddingHorizontal: 16, paddingVertical: 10, position: 'relative' }}>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, fontWeight: '700', color: active ? '#111111' : '#BBBBBB' }}>
-                    {t.label}
-                  </Text>
-                  {active && (
-                    <View style={{ position: 'absolute', left: 0, right: 0, bottom: -1, height: 2, backgroundColor: '#FB923C' }} />
-                  )}
-                </Pressable>
-              )
-            })}
-          </View>
+          {/* Swipeable pager — two full-width pages, each its own vertical scroll. */}
+          <ScrollView
+            ref={pagerRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            directionalLockEnabled
+            onMomentumScrollEnd={onPagerSettle}
+            style={{ flex: 1 }}
+          >
+            <View style={{ width }}>
+              <Animated.ScrollView
+                onScroll={onScroll}
+                scrollEventThrottle={16}
+                contentContainerStyle={{ paddingTop: 14, paddingBottom: insets.bottom + 72 }}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />}
+              >
+                {upcomingBody}
+              </Animated.ScrollView>
+            </View>
 
-          <View style={{ height: 14 }} />
-
-          {tab === 'upcoming' ? (
-            upcoming.length === 0 ? (
-              <EmptyUpcoming onCreate={() => router.push('/create' as any)} />
-            ) : (
-              upcomingDays.map((day, i) => (
-                <AgendaDay
-                  key={day.dateStr}
-                  dateStr={day.dateStr}
-                  plans={day.plans}
-                  isToday={day.dateStr === todayStr}
-                  isLast={i === upcomingDays.length - 1}
-                  onOpen={(id) => router.push(`/plan/${id}` as any)}
-                />
-              ))
-            )
-          ) : past.length === 0 ? (
-            <EmptyPast />
-          ) : (
-            pastMonths.map((month) => {
-              const stat = monthStat(month.plans)
-              return (
-                <View key={month.key}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 }}>
-                    <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 13, fontWeight: '800', color: '#111111' }}>
-                      {monthLabel(month.key)}
-                    </Text>
-                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 9, color: '#AAAAAA' }}>
-                      {stat.count} plan{stat.count > 1 ? 's' : ''}
-                      {stat.rate != null ? ` · ${stat.rate}% showed` : ''}
-                    </Text>
-                  </View>
-                  {month.plans.map((p) =>
-                    p.status === 'cancelled' ? (
-                      <CancelledRow key={p.id} plan={p} onPress={() => router.push(`/plan/${p.id}` as any)} />
-                    ) : (
-                      <MemoryCard key={p.id} plan={p} onPress={() => router.push(`/plan/${p.id}` as any)} />
-                    ),
-                  )}
-                </View>
-              )
-            })
-          )}
-        </Animated.ScrollView>
+            <View style={{ width }}>
+              <Animated.ScrollView
+                onScroll={onScroll}
+                scrollEventThrottle={16}
+                contentContainerStyle={{ paddingTop: 14, paddingBottom: insets.bottom + 72 }}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />}
+              >
+                {pastBody}
+              </Animated.ScrollView>
+            </View>
+          </ScrollView>
+        </View>
       )}
 
       <AppHeader scrollY={scrollY} />
