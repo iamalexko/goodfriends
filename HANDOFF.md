@@ -2,6 +2,8 @@
 
 A social commitment app for a friend group in Dubai. Plans → RSVPs → attendance scoring → leaderboard. The "race" between members is the core game mechanic; reliability is the metric.
 
+**Status (2026-06):** Web app is live in production. The **mobile port is feature-complete** — every web screen has a native iOS equivalent except the AI monthly recap (`Summary.jsx`), which is deliberately deferred. See [Mobile app → Status by phase](#status-by-phase) and [Roadmap](#roadmap).
+
 ---
 
 ## Stack
@@ -149,10 +151,15 @@ To add a screen: create the file, add an import + case in `App.jsx`, navigate fr
 **Expo Router**, file-based. Anything in `app/` is a route. Folders in parens like `(tabs)/` are route groups (don't appear in URLs).
 
 ```
-/         → app/index.tsx       (auth gate → /auth or /(tabs)/home)
-/auth     → app/auth.tsx        (login + signup toggle)
-/(tabs)/home, /crew, /create, /plans, /profile
+/                → app/index.tsx          (auth gate → /auth or /(tabs)/home)
+/auth            → app/auth.tsx           (login + signup toggle)
+/(tabs)/home, /crew, /plans, /profile     (NativeTabs — 4 tabs)
+/create          → app/create.tsx         (two-step Create Plan, root Stack modal)
+/plan/[id]       → app/plan/[id].tsx       (Plan Detail: view·RSVP·organiser actions·Moments)
+/notifications   → app/notifications.tsx   (in-app feed; opened from the AppHeader bell)
 ```
+
+`create`, `plan/[id]`, and `notifications` live **outside** the `(tabs)` group (they're pushed on the root Stack, so no tab bar). Open Plan Detail with `router.push('/plan/' + id)`.
 
 Navigate with `useRouter()`:
 ```tsx
@@ -197,10 +204,10 @@ router.replace('/auth' as any)
 - `notifications` table with RLS (`auth.uid() = user_id`)
 - `create_notification(p_user_id, p_type, p_title, p_body, p_plan_id, p_actor_id)` RPC — security definer, no-ops if user == actor
 - Realtime publication enabled — bell badge subscribes via `postgres_changes` INSERT filter
-- **Types**: `event_invite`, `event_rsvp`, `event_comment`, `event_closed`, `event_cancelled`, `event_reminder`, `event_filling`, `no_reply_nudge`, `photo_posted`, `reaction_received`
-- **Where fired**:
-  - `CreatePlan.jsx` → invite
-  - `PlanDetail.jsx`: setRsvpStatus → rsvp + filling, deletePlan → cancelled, closeEvent → closed, submitPost → comment/photo, toggleReaction → reaction
+- **Types**: `event_invite`, `event_rsvp`, `event_comment`, `event_closed`, `event_cancelled`, `event_reminder`, `event_filling`, `no_reply_nudge`, `photo_posted`, `reaction_received`, `event_invite_request`, `event_request_approved`, `event_request_rejected`
+- **Where fired** (web `PlanDetail.jsx` and the mobile `app/plan/[id].tsx` fire the same set 1:1):
+  - `CreatePlan.jsx` / `app/create.tsx` → invite
+  - PlanDetail: setRsvpStatus → rsvp (+ filling on web), deletePlan → cancelled, closeEvent → closed, submitPost → comment/photo, toggleReaction → reaction, nudgeMember → invite (poke), requestInvite → invite_request, decideInviteRequest → request_approved/rejected
   - `send-reminders` edge fn → reminder + no-reply (daily 5 UTC via pg_cron)
 
 ### Monthly summary system (already wired)
@@ -222,7 +229,11 @@ router.replace('/auth' as any)
 
 ### Storage
 
-- Bucket `plan-photos` — public URLs, path format `<userId>/<planId>-<timestamp>.<ext>`
+- Bucket `plan-photos` — **public** bucket, path format `<userId>/<planId>-<timestamp>.<ext>`.
+- RLS: anyone can `SELECT`; any authed user can `INSERT`; `DELETE` only your own (`auth.uid() = foldername[1]`, i.e. the leading `<userId>` path segment). So the public anon key can read but **cannot delete** — deletes must run from an authed client.
+- **Web upload** (`PlanDetail.jsx`): `supabase.storage.from('plan-photos').upload(path, file)` with a browser `File`.
+- **Mobile upload** (`app/plan/[id].tsx`): `expo-image-picker` returns a `file://` asset → `fetch(uri).then(r => r.arrayBuffer())` → `upload(path, arraybuffer, { contentType })`. This is Supabase's RN-recommended path; do **not** pass a `File`/`Blob` on RN. Verified byte-exact (393,493 in = 393,493 out) — no truncation.
+- **No native rebuild needed for the picker** — `expo-image-picker` was already in `package.json` since the first scaffold, so autolinking baked `ExpoImagePicker` into the iOS pods, and the camera/photo `Info.plist` strings already live in `app.json` → `ios.infoPlist`. Photo posting is pure JS on the existing dev build.
 
 ---
 
@@ -276,14 +287,22 @@ Defined in `src/index.css` and Tailwind config:
 
 ### Status by phase
 
+**🎉 The mobile port is feature-complete** — every web screen now has a native equivalent. Only the web `Summary.jsx` (AI monthly recap) is unported (deliberately deferred — see Roadmap).
+
 - ✅ **Phase 1** — UI primitives (TopBar, NavBar, Pill, EmojiAvatar, BackButton, SectionHeader, Loader) + full Auth flow (login + signup + onboarding emoji). PR #17.
 - ✅ **Phase 2.1** — Home (greeting, CrewPill, sort sheet, plan cards, past plans). PR #18.
 - ✅ **Phase 2.2** — Plans (Upcoming/Past tabs) + Profile (hero + stats + history + emoji picker) + EmojiPicker + StatCell. PR #19.
 - ✅ Auth-screen post-signin redirect + TopBar error handling. PRs #20, #21.
 - ✅ **Native iOS build** via `expo prebuild` — replaces Expo Go for development. PR #22.
-- ⏳ **Phase 3** — CreatePlan (3-step wizard) + PlanDetail (RSVP tiles + moments + edit/delete sheets). NOT STARTED. Biggest screen on web (~1700 lines).
-- ⏳ **Phase 4** — Crew (identity header + podium + race + stats).
-- ⏳ **Phase 5** — Notifications screen, Summary screen, deep-link handling for `goodfriends://join/...`, push notifications.
+- ✅ **Nav chrome** — `NativeTabs` (UIKit-rendered Liquid Glass tab bar) + always-on frosted `AppHeader`. PRs #26–#29.
+- ✅ **Phase 3 — Create Plan** (two-step flow, native date/time pickers, crew invite toggles). PR #31.
+- ✅ **Phase 3 — Plan Detail** (`app/plan/[id].tsx`), built in three slices:
+  - **v1** view + RSVP (PR #32)
+  - **v2a** organiser edit + close/attendance (PR #35)
+  - **v2b** delete/cancel + nudges + invite-requests (PR #36)
+  - **Moments** photo + comment feed (PR #37)
+- ✅ **Notifications** screen (`app/notifications.tsx`) — markAllRead on view, tap-through to plan. PR #33.
+- ✅ **Crew** leaderboard (Hall of Fame podium + show-up race + tags). PR #34.
 
 ### Dev loop
 
@@ -380,22 +399,23 @@ import { House } from 'phosphor-react-native'
 <House size={24} color="#111" weight="fill" />       // active
 ```
 
-### Bottom navigation — News+ floating glass (Option B)
+### Bottom navigation — `NativeTabs` (UIKit Liquid Glass)
 
-`apps/mobile/components/LiquidGlassTabBar.tsx` + `components/GlassSurface.tsx`.
+`apps/mobile/app/(tabs)/_layout.tsx`, using `expo-router/unstable-native-tabs`.
 
-- **Floating pill** with 4 labelled tabs (`Home · Crew · Plans · Profile`) and a **detached dark 58px Create circle** to the right of the pill.
-- Pill is rendered via `<GlassSurface>` which:
-  - Uses **real iOS 26 Liquid Glass** (`expo-glass-effect`'s `GlassView` with `glassEffectStyle="regular"`) when `isLiquidGlassAvailable()` returns true. This is a genuine system material — content scrolling beneath refracts properly, not just blurs.
-  - **Falls back to `BlurView`** (intensity 40, light tint, 1px white inner border, soft drop shadow) on iOS < 26.
-  - `isLiquidGlassAvailable()` is called **once at module load** per Expo docs — some iOS 26 beta builds ship without the API and calling `GlassView` unconditionally crashes.
-- Active tab: Phosphor icon swaps to `fill` + ink (`#111`), label `#111`, spring-scales to `1.08`. Inactive: `regular` + `#888`.
-- Tab labels: `Inter_600SemiBold`, 9px.
-- Create circle: dark `rgba(17,17,17,0.92)`, 58px, white `Plus` icon (bold, 26px), shadow + 1px white-translucent border for the glass-on-glass edge.
-- Sits at `bottom: Math.max(insets.bottom, 16) + 8`, horizontal margin 14px.
-- Content scrolls visibly **beneath** the glass — every scroll container under `(tabs)/` gets `paddingBottom: 120` so the last item clears the floating nav.
-- Haptics: Light on tab tap, Medium on Create circle tap.
-- Native deps: `expo-glass-effect`, `expo-blur`, `phosphor-react-native`, `react-native-svg`, `react-native-reanimated`. Any change requires `expo prebuild` + `expo run:ios`.
+- **The tab bar is now rendered by UIKit, not by us.** This gives genuine, free iOS 26 Liquid Glass with the correct scroll-edge behaviour — no custom glass component to maintain.
+- 4 tabs: `Home · Crew · Plans · Profile`. `<NativeTabs tintColor="#111111" minimizeBehavior="onScrollDown">` with `<NativeTabs.Trigger>` + `<Icon sf=... />` + `<Label>`.
+- ⚠️ Import `Icon` / `Label` from **`expo-router/unstable-native-tabs`** (top-level), NOT `NativeTabs.Trigger.Icon`. Icons are **SF Symbols** (`sf="house.fill"` etc.), not Phosphor — Phosphor SVGs can't render inside the native bar. Crew uses a heart SF Symbol (PR #26).
+- There is **no Create tab/FAB in the bar** anymore. "+ Plan" lives in the `AppHeader` and pushes the `/create` modal.
+- The old custom `LiquidGlassTabBar.tsx` + `GlassSurface.tsx` are **retired** (GlassSurface still exists but is no longer the nav). `paddingBottom: 120` hacks were removed — NativeTabs reserves its own space.
+
+### Top header — `AppHeader` (always-on frosted glass)
+
+`apps/mobile/components/AppHeader.tsx`, mounted by each `(tabs)/*` screen.
+
+- An **always-on `expo-blur` `BlurView`** (`BLUR_INTENSITY = 85`), NOT iOS 26 `GlassView`. Hard-won: `GlassView`'s lens can't be opacity-animated (blur drops out) and `MaskedView` snapshots it to a static bitmap (kills the live lens), so the scroll-fade/feather approaches all failed. A plain always-visible BlurView is the reliable answer. (Saga across PRs #27–#29.)
+- Contains the wordmark, a **"+ Plan"** pill (→ `/create`), and the **bell** with a live unread badge (realtime `notifications` subscription). The old profile button was removed from the header.
+- Exposes `APP_HEADER_ROW_HEIGHT` so screens can pad their scroll content beneath it. Takes an optional `scrollY` shared value (currently unused — kept for future scroll effects).
 
 ### Patterns + gotchas specific to mobile
 
@@ -413,6 +433,14 @@ import { House } from 'phosphor-react-native'
 **TopBar realtime subscription is best-effort.** The unread-badge channel + count query are both wrapped in try/catch — failures log `__DEV__` warnings instead of surfacing as red LogBox toasts. The badge stays at its last known value.
 
 **Auth gate only runs on `/`.** After sign in/up, explicitly `router.replace('/(tabs)/home')`. (PR #20.)
+
+**Moments photo upload uses `fetch → arrayBuffer`, not `File`.** `expo-image-picker` (`mediaTypes: ['images']`) returns an asset with a `file://` `uri`. Upload via `const ab = await fetch(uri).then(r => r.arrayBuffer()); supabase.storage.from('plan-photos').upload(path, ab, { contentType: asset.mimeType })`. Passing a `Blob`/`File` (the web pattern) silently uploads 0 bytes on RN. Set `contentType` explicitly or the object serves as `application/octet-stream`. (PR #37.)
+
+**Keyboard handling for inline inputs: `automaticallyAdjustKeyboardInsets` on the ScrollView** (iOS) is simpler and less error-prone than `KeyboardAvoidingView` for an input that lives mid-scroll (the Moments composer). Pair it with `keyboardShouldPersistTaps="handled"` so tapping send/camera/reaction buttons while the keyboard is up doesn't get swallowed by the dismiss.
+
+**Pre-existing `tsc` noise — don't chase it.** `npx tsc --noEmit` reports ~17 errors in `notifications.tsx`, `GlassSurface.tsx`, `LiquidGlassTabBar.tsx`, `AuthContext.tsx` — all `@types/react` `bigint`/`ReactNode` and phosphor `Icon`-as-JSX type mismatches from a version skew, not real bugs (the app runs fine). The guardrail is **zero NEW errors in the file you touched**: `npx tsc --noEmit -p tsconfig.json 2>&1 | grep 'yourfile'`.
+
+**Sim verification technique (no tap automation).** `idb` won't install (Command Line Tools too old vs Xcode 26.x); `cliclick` exists but the native iOS picker/alert sheets aren't reliably scriptable. To verify a pushed detail screen renders: temporarily inject a one-shot `router.push('/plan/<id>')` after `setPlans(...)` in `home.tsx` (guard with a `globalThis` flag), `terminate`+`launch` the app, then `xcrun simctl io booted screenshot`. To reach lower content, a temp `contentOffset` works only within the *initially* laid-out height (async-loaded lists clamp it) — flip the list `.order()` instead to bring new rows to the top. **Always revert these temp injections before committing** (grep for a marker like `TEMP-`). To exercise a mutation that needs a file (e.g. the photo upload) without the picker, feed the real handler an `expo-asset` `file://` URI — it runs 100% of the production code path against the real backend.
 
 ### Build environment gotchas (one-time setup)
 
@@ -455,11 +483,12 @@ import { House } from 'phosphor-react-native'
 
 ## Roadmap
 
-**Mobile** (in priority order):
-- [ ] **Phase 3** — port `CreatePlan` (3-step wizard) and `PlanDetail` (RSVP tiles + moments feed + edit/delete sheets) to mobile. PlanDetail is the largest screen (~1700 lines on web) — split into sub-components.
-- [ ] **Phase 4** — port `Crew` (identity header + podium + race + stats).
-- [ ] **Phase 5** — Notifications screen, Summary screen, deep-link handling for `goodfriends://join/...`, push notifications via `expo-notifications`.
-- [ ] TestFlight distribution once Phase 3 ships (EAS Build).
+**Mobile** — ✅ **core port complete** (Auth, Home, Plans, Crew, Profile, Create Plan, Plan Detail + Moments, Notifications). Remaining:
+- [ ] **Summary screen** — port web `Summary.jsx` (AI monthly recap). The only unported screen; needs the `generate-summary` edge fn wired + the recap UI.
+- [ ] **Deep links** — handle `goodfriends://join/...` (invite) and `goodfriends://plan/<id>` cold-start routing.
+- [ ] **Push notifications** via `expo-notifications` — NOTE: the plugin + `aps-environment` entitlement were **removed** to unblock device builds on a free/personal Apple team (it can't sign push entitlements). Re-add when on a paid team / EAS Build.
+- [ ] **Device tap-through QA** — the native photo-picker tap and the in-app mutation buttons (RSVP submit, edit save, close attendance, delete, nudge, approve/reject, react) are verified at render + backend level but not via real taps (no sim tap automation). A quick pass on a physical device closes the loop.
+- [ ] TestFlight distribution via EAS Build.
 
 **Web + cross-platform**:
 - [ ] Group invite share UX (link generation + share sheet beyond raw `/join/:code`)
