@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
-import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
-import { CalendarBlank, Clock, MapPin, PencilSimple, Check } from 'phosphor-react-native'
+import { CalendarBlank, Clock, MapPin, PencilSimple, Check, Camera, PaperPlaneTilt, X, DotsThree, Trash, Plus, CornersOut } from 'phosphor-react-native'
 import * as Haptics from 'expo-haptics'
+import * as ImagePicker from 'expo-image-picker'
 import DateTimePicker from '@react-native-community/datetimepicker'
 
 import { supabase } from '../../lib/supabase'
@@ -25,9 +26,26 @@ const TIER_VARIANT: Record<number, 'tier1' | 'tier2' | 'tier3'> = { 1: 'tier1', 
 const TIER_LABEL: Record<number, string> = { 1: 'Tier 1 · Big deal', 2: 'Tier 2 · Weekend plan', 3: 'Tier 3 · Low-key' }
 const RSVP_PILL: Record<string, 'mint' | 'yellow' | 'neutral'> = { in: 'mint', likely: 'yellow', no: 'neutral' }
 
+// Quick-react palette — mirrors the web Moments feed.
+const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶', '❓']
+
 function formatPlanDate(dateStr?: string | null) {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleDateString('en-AE', { weekday: 'long', day: 'numeric', month: 'short' })
+}
+
+// Compact "2h" / "3d" relative time for Moments post headers.
+function formatTimeAgo(iso?: string | null) {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h`
+  const d = Math.floor(h / 24)
+  if (d < 7) return `${d}d`
+  return new Date(iso).toLocaleDateString('en-AE', { day: 'numeric', month: 'short' })
 }
 
 type Profile = { id: string; display_name: string; emoji: string | null }
@@ -50,6 +68,19 @@ type PlanRow = {
   organiser_id: string
   notes: string | null
   organiser?: { display_name: string; emoji: string | null } | null
+}
+type Reaction = { id: string; emoji: string; user_id: string }
+type Post = {
+  id: string
+  plan_id: string
+  user_id: string
+  type: 'photo' | 'comment'
+  content: string | null
+  image_url: string | null
+  caption: string | null
+  created_at: string
+  profiles: { display_name: string | null; emoji: string | null } | null
+  reactions: Reaction[] | null
 }
 
 export default function PlanDetail() {
@@ -94,9 +125,50 @@ export default function PlanDetail() {
   const [myInviteRequest, setMyInviteRequest] = useState<InviteRequest | null>(null)
   const [requestBusy, setRequestBusy] = useState(false)
 
+  // Moments feed
+  const [posts, setPosts] = useState<Post[]>([])
+  const [composerText, setComposerText] = useState('')
+  const [composerPhoto, setComposerPhoto] = useState<ImagePicker.ImagePickerAsset | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [editingPost, setEditingPost] = useState<{ id: string; content: string } | null>(null)
+  const [reactionPickerId, setReactionPickerId] = useState<string | null>(null)
+  const [actionSheetPost, setActionSheetPost] = useState<Post | null>(null)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const composerInputRef = useRef<TextInput>(null)
+
   useEffect(() => {
     load()
   }, [id])
+
+  // Moments are crew-only (organiser or anyone on the RSVP list). Load once the
+  // plan + rsvps are known, and keep the feed live via realtime on posts +
+  // reactions. Each mutation also calls loadPosts() so the UI is correct even if
+  // the realtime channel is unavailable.
+  const canViewMoments =
+    !!plan && !!user && (plan.organiser_id === user.id || rsvps.some((r) => r.user_id === user.id))
+
+  useEffect(() => {
+    if (!id || !canViewMoments) { setPosts([]); return }
+    loadPosts()
+    const channel = supabase
+      .channel('posts-' + id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts', filter: `plan_id=eq.${id}` }, loadPosts)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, loadPosts)
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, canViewMoments])
+
+  async function loadPosts() {
+    if (!id) return
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*, profiles(display_name, emoji), reactions(id, emoji, user_id)')
+      .eq('plan_id', id)
+      .order('created_at', { ascending: true })
+    if (error) { if (__DEV__) console.warn('loadPosts', error); return }
+    setPosts((data || []) as Post[])
+  }
 
   async function load() {
     if (!id) return
@@ -394,6 +466,180 @@ export default function PlanDetail() {
     load()
   }
 
+  // ---- Moments ----
+  async function pickPhoto() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Photo access needed', 'Enable photo access in Settings to add a photo.')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    })
+    if (result.canceled || !result.assets?.length) return
+    setComposerPhoto(result.assets[0])
+  }
+
+  function removeComposerPhoto() {
+    setComposerPhoto(null)
+  }
+
+  function startEditing(post: Post) {
+    setActionSheetPost(null)
+    setEditingPost({ id: post.id, content: post.content || '' })
+    setComposerPhoto(null)
+    setComposerText(post.content || '')
+    setTimeout(() => composerInputRef.current?.focus(), 80)
+  }
+
+  function cancelEditing() {
+    setEditingPost(null)
+    setComposerText('')
+  }
+
+  // Unified submit: edit a comment, post a text comment, or upload a photo
+  // (optionally captioned). Mirrors the web composer's three branches.
+  async function submitPost() {
+    if (!user || !plan || uploading) return
+    const text = composerText.trim()
+    if (!text && !composerPhoto) return
+
+    // Edit path — only existing comments carry editable text.
+    if (editingPost) {
+      if (!text) return
+      const { error } = await supabase.from('posts').update({ content: text }).eq('id', editingPost.id)
+      if (error) { if (__DEV__) console.warn('edit comment', error); return }
+      cancelEditing()
+      loadPosts()
+      return
+    }
+
+    setUploading(true)
+    let imageUrl: string | null = null
+
+    if (composerPhoto) {
+      try {
+        const uri = composerPhoto.uri
+        const ext = (uri.split('.').pop() || 'jpg').toLowerCase().split('?')[0]
+        const path = `${user.id}/${plan.id}-${Date.now()}.${ext}`
+        // Supabase's RN-recommended upload: fetch the local file into an
+        // ArrayBuffer, then upload the bytes directly to Storage.
+        const arraybuffer = await fetch(uri).then((res) => res.arrayBuffer())
+        const { error: upErr } = await supabase.storage
+          .from('plan-photos')
+          .upload(path, arraybuffer, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: composerPhoto.mimeType || `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+          })
+        if (upErr) { if (__DEV__) console.warn('photo upload', upErr); setUploading(false); return }
+        imageUrl = supabase.storage.from('plan-photos').getPublicUrl(path).data.publicUrl
+      } catch (e) {
+        if (__DEV__) console.warn('photo upload threw', e)
+        setUploading(false)
+        return
+      }
+    }
+
+    const isPhoto = !!composerPhoto
+    const { error: insErr } = await supabase.from('posts').insert({
+      plan_id: plan.id,
+      user_id: user.id,
+      type: isPhoto ? 'photo' : 'comment',
+      image_url: imageUrl,
+      caption: isPhoto && text ? text : null,
+      content: !isPhoto && text ? text : null,
+    })
+    if (insErr) {
+      if (__DEV__) console.warn('insert post', insErr)
+    } else {
+      // Notify everyone else on the plan (never self).
+      const others = [...new Set(rsvps.map((r) => r.user_id))].filter((uid) => uid !== user.id)
+      for (const uid of others) {
+        try {
+          await supabase.rpc('create_notification', {
+            p_user_id: uid,
+            p_type: isPhoto ? 'photo_posted' : 'event_comment',
+            p_title: isPhoto ? 'New photo 📸' : 'New comment',
+            p_body: isPhoto
+              ? `${profile?.display_name || 'Someone'} added a photo to ${plan.name}`
+              : `${profile?.display_name || 'Someone'}: ${text.slice(0, 60)}${text.length > 60 ? '…' : ''}`,
+            p_plan_id: plan.id,
+            p_actor_id: user.id,
+          })
+        } catch (e) { if (__DEV__) console.warn('post notify', e) }
+      }
+    }
+
+    setComposerText('')
+    setComposerPhoto(null)
+    setUploading(false)
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    loadPosts()
+  }
+
+  async function toggleReaction(post: Post, emoji: string) {
+    if (!user) return
+    const existing = post.reactions?.find((r) => r.user_id === user.id)
+    setReactionPickerId(null)
+    if (existing) {
+      // Same emoji → remove. Different emoji → swap (delete then insert).
+      const { error } = await supabase.from('reactions').delete().eq('id', existing.id)
+      if (error) { if (__DEV__) console.warn('reaction delete', error); return }
+      if (existing.emoji === emoji) { loadPosts(); return }
+    }
+    const { error: insErr } = await supabase.from('reactions').insert({
+      post_id: post.id, user_id: user.id, emoji,
+    })
+    if (insErr) { if (__DEV__) console.warn('reaction insert', insErr); loadPosts(); return }
+    if (post.user_id !== user.id) {
+      try {
+        await supabase.rpc('create_notification', {
+          p_user_id: post.user_id,
+          p_type: 'reaction_received',
+          p_title: 'Someone reacted',
+          p_body: `${profile?.display_name || 'Someone'} reacted ${emoji} to your post in ${plan?.name || 'a plan'}`,
+          p_plan_id: plan?.id,
+          p_actor_id: user.id,
+        })
+      } catch (e) { if (__DEV__) console.warn('reaction notify', e) }
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    loadPosts()
+  }
+
+  function confirmDeletePost(post: Post) {
+    setActionSheetPost(null)
+    Alert.alert(
+      post.type === 'photo' ? 'Delete this photo?' : 'Delete this comment?',
+      'This can’t be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => performDeletePost(post) },
+      ],
+    )
+  }
+
+  async function performDeletePost(post: Post) {
+    // Best-effort storage cleanup for photo posts.
+    if (post.type === 'photo' && post.image_url) {
+      const path = post.image_url.split('/plan-photos/')[1]
+      if (path) { try { await supabase.storage.from('plan-photos').remove([path]) } catch (e) { if (__DEV__) console.warn('storage remove', e) } }
+    }
+    const { error } = await supabase.from('posts').delete().eq('id', post.id)
+    if (error) { if (__DEV__) console.warn('delete post', error); return }
+    if (editingPost?.id === post.id) cancelEditing()
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
+    loadPosts()
+  }
+
+  function groupReactions(reactions: Reaction[] | null): [string, number][] {
+    const map = new Map<string, number>()
+    ;(reactions || []).forEach((r) => map.set(r.emoji, (map.get(r.emoji) || 0) + 1))
+    return [...map.entries()]
+  }
+
   function goBack() {
     if (router.canGoBack()) router.back()
     else router.replace('/(tabs)/home' as any)
@@ -438,7 +684,11 @@ export default function PlanDetail() {
     <View style={{ flex: 1, backgroundColor: '#FFFBF5', paddingTop: insets.top }}>
       <Header onBack={goBack} onEdit={isOrganiser && !isClosed ? openEdit : undefined} />
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Math.max(40, insets.bottom + 24) }}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Math.max(40, insets.bottom + 24) }}
+      >
         {/* Title + tier */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginTop: 4 }}>
           <Text style={{ flex: 1, fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 26, fontWeight: '800', color: '#111111', letterSpacing: -0.5, lineHeight: 30 }}>
@@ -625,6 +875,194 @@ export default function PlanDetail() {
           </View>
         )}
 
+        {/* Moments — crew-only photo + comment feed */}
+        {canViewMoments && (
+          <View style={{ marginTop: 28 }}>
+            <Text style={SECTION_LABEL}>Moments</Text>
+
+            {/* Composer */}
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: composerText.trim() || composerPhoto ? '#FB923C' : 'rgba(0,0,0,0.1)',
+                borderRadius: 18,
+                backgroundColor: '#FFFFFF',
+                overflow: 'hidden',
+              }}
+            >
+              {editingPost && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 10 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#F59E0B' }}>Editing comment…</Text>
+                  <Pressable onPress={cancelEditing} hitSlop={8}>
+                    <X size={14} weight="bold" color="#AAAAAA" />
+                  </Pressable>
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 12 }}>
+                <EmojiAvatar emoji={profile?.emoji || '😎'} size="sm" />
+                {composerPhoto && (
+                  <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden' }}>
+                    <Image source={{ uri: composerPhoto.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    <Pressable
+                      onPress={removeComposerPhoto}
+                      style={{ position: 'absolute', top: 3, right: 3, width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <X size={10} weight="bold" color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                )}
+                <TextInput
+                  ref={composerInputRef}
+                  value={composerText}
+                  onChangeText={setComposerText}
+                  placeholder={composerPhoto ? 'Add a caption… (optional)' : 'Add a moment…'}
+                  placeholderTextColor="#BBBBBB"
+                  multiline
+                  style={{ flex: 1, fontFamily: 'Inter_500Medium', fontSize: 14, color: '#111111', minHeight: 38, paddingTop: 6 }}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' }}>
+                <Pressable
+                  onPress={pickPhoto}
+                  disabled={!!editingPost}
+                  hitSlop={8}
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.04)', alignItems: 'center', justifyContent: 'center', opacity: editingPost ? 0.4 : 1 }}
+                >
+                  <Camera size={16} weight="regular" color="#888888" />
+                </Pressable>
+                <Pressable
+                  onPress={submitPost}
+                  disabled={uploading || (!composerText.trim() && !composerPhoto)}
+                  style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: composerText.trim() || composerPhoto ? '#111111' : '#E5E7EB' }}
+                >
+                  {uploading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <PaperPlaneTilt size={16} weight="fill" color={composerText.trim() || composerPhoto ? '#FFFFFF' : '#AAAAAA'} />
+                  )}
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Uploading skeleton */}
+            {uploading && composerPhoto && (
+              <View style={{ marginTop: 14, height: 180, borderRadius: 14, backgroundColor: '#F1F1F1', alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator color="#AAAAAA" />
+              </View>
+            )}
+
+            {/* Empty state */}
+            {posts.length === 0 && !uploading && (
+              <View style={{ alignItems: 'center', paddingVertical: 28 }}>
+                <Text style={{ fontSize: 30, marginBottom: 8 }}>📸</Text>
+                <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 15, fontWeight: '800', color: '#111111', marginBottom: 4 }}>
+                  No moments yet
+                </Text>
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA' }}>
+                  Be the first to add a photo or comment
+                </Text>
+              </View>
+            )}
+
+            {/* Feed */}
+            <View style={{ marginTop: posts.length ? 18 : 0, gap: 18 }}>
+              {posts.map((post) => {
+                const isOwn = post.user_id === user?.id
+                const myReaction = post.reactions?.find((r) => r.user_id === user?.id)
+                const grouped = groupReactions(post.reactions)
+
+                const reactionsBar = (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, position: 'relative' }}>
+                    {grouped.map(([emoji, count]) => {
+                      const mine = myReaction?.emoji === emoji
+                      return (
+                        <Pressable
+                          key={emoji}
+                          onPress={() => toggleReaction(post, emoji)}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: mine ? '#FEF3C7' : 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: mine ? '#FB923C' : 'rgba(0,0,0,0.08)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}
+                        >
+                          <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                          <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#555555' }}>{count}</Text>
+                        </Pressable>
+                      )
+                    })}
+                    <Pressable
+                      onPress={() => setReactionPickerId(reactionPickerId === post.id ? null : post.id)}
+                      hitSlop={6}
+                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.05)', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Plus size={12} weight="bold" color="#888888" />
+                    </Pressable>
+                    {reactionPickerId === post.id && (
+                      <View
+                        style={{ position: 'absolute', bottom: 34, left: 0, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8, zIndex: 30 }}
+                      >
+                        {REACTION_OPTIONS.map((e) => (
+                          <Pressable key={e} onPress={() => toggleReaction(post, e)} hitSlop={2} style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 20 }}>{e}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )
+
+                const header = (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <EmojiAvatar emoji={post.profiles?.emoji || '😎'} size="sm" />
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#111111' }}>
+                      {post.profiles?.display_name || 'Friend'}
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: '#BBBBBB' }}>
+                      · {formatTimeAgo(post.created_at)}
+                    </Text>
+                    <View style={{ flex: 1 }} />
+                    {isOwn && (
+                      <Pressable onPress={() => setActionSheetPost(post)} hitSlop={8}>
+                        <DotsThree size={20} weight="bold" color="#CCCCCC" />
+                      </Pressable>
+                    )}
+                  </View>
+                )
+
+                if (post.type === 'photo' && post.image_url) {
+                  return (
+                    <View key={post.id}>
+                      {header}
+                      <Pressable onPress={() => setLightboxUrl(post.image_url)} style={{ width: '100%', height: 200, borderRadius: 14, overflow: 'hidden', backgroundColor: '#F1F1F1' }}>
+                        <Image source={{ uri: post.image_url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                        <View style={{ position: 'absolute', bottom: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                          <CornersOut size={10} weight="bold" color="#FFFFFF" />
+                          <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>View full</Text>
+                        </View>
+                      </Pressable>
+                      {post.caption ? (
+                        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#111111', lineHeight: 19, marginTop: 6 }}>
+                          {post.caption}
+                        </Text>
+                      ) : null}
+                      {reactionsBar}
+                    </View>
+                  )
+                }
+
+                // Comment — speech bubble
+                return (
+                  <View key={post.id}>
+                    {header}
+                    <View style={{ alignSelf: 'flex-start', maxWidth: '100%', backgroundColor: 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderTopLeftRadius: 2, borderTopRightRadius: 14, borderBottomLeftRadius: 14, borderBottomRightRadius: 14, paddingHorizontal: 12, paddingVertical: 10 }}>
+                      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#111111', lineHeight: 19 }}>
+                        {post.content}
+                      </Text>
+                    </View>
+                    {reactionsBar}
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+        )}
+
         {/* Organiser: close the plan (open plans only) */}
         {isOrganiser && !isClosed && (
           <Pressable
@@ -763,6 +1201,47 @@ export default function PlanDetail() {
             <Pressable onPress={() => !deleting && setDeleteOpen(false)} style={{ paddingVertical: 12, alignItems: 'center', marginTop: 4 }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, fontWeight: '600', color: 'rgba(17,17,17,0.6)' }}>Keep it</Text>
             </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ---- Post action sheet (own posts) ---- */}
+      <Modal visible={!!actionSheetPost} transparent animationType="slide" onRequestClose={() => setActionSheetPost(null)}>
+        <Pressable onPress={() => setActionSheetPost(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12, paddingBottom: Math.max(24, insets.bottom + 12), paddingHorizontal: 12 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 12 }} />
+            {actionSheetPost?.type === 'comment' && (
+              <Pressable onPress={() => actionSheetPost && startEditing(actionSheetPost)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' }}>
+                  <PencilSimple size={16} weight="bold" color="#111111" />
+                </View>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#111111' }}>Edit comment</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={() => actionSheetPost && confirmDeletePost(actionSheetPost)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
+                <Trash size={16} weight="bold" color="#EF4444" />
+              </View>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#EF4444' }}>
+                {actionSheetPost?.type === 'photo' ? 'Delete photo' : 'Delete comment'}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ---- Photo lightbox ---- */}
+      <Modal visible={!!lightboxUrl} transparent animationType="fade" onRequestClose={() => setLightboxUrl(null)}>
+        <Pressable onPress={() => setLightboxUrl(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' }}>
+          {lightboxUrl && (
+            <Image source={{ uri: lightboxUrl }} style={{ width: '100%', height: '85%' }} resizeMode="contain" />
+          )}
+          <Pressable
+            onPress={() => setLightboxUrl(null)}
+            hitSlop={10}
+            style={{ position: 'absolute', top: insets.top + 12, right: 20, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <X size={18} weight="bold" color="#FFFFFF" />
           </Pressable>
         </Pressable>
       </Modal>
