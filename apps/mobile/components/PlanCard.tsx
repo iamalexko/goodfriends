@@ -41,20 +41,41 @@ function formatPlanDate(dateStr: string) {
   return d.toLocaleDateString('en-AE', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
+// "13:30" (24h, as stored) → "1:30 PM". Matches the detail page's formatter.
+function formatTime12(t: string) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t)
+  if (!m) return t
+  let h = parseInt(m[1], 10)
+  const ap = h >= 12 ? 'PM' : 'AM'
+  h = h % 12 || 12
+  return `${h}:${m[2]} ${ap}`
+}
+
 export function PlanCard({
   plan,
   onPress,
   onRsvp,
   variant = 'home',
+  // The date is contextual, not absolute: a day-group header above the card
+  // already shows the date, so the day-grouped Home feed passes showDate={false}.
+  // Ungrouped contexts (search, a flat list, the "Later" pile) keep it (default).
+  showDate = true,
 }: {
   plan: Plan
   onPress?: () => void
   onRsvp?: (status: 'in' | 'no') => void
   variant?: 'home' | 'plans'
+  showDate?: boolean
 }) {
   // Pending border only for OPEN plans you haven't replied to — past or
   // cancelled cards never get the orange glow.
   const isPendingOpen = !plan.my_rsvp && plan.status === 'open'
+
+  // Muted support text trailing the location: the time, prefixed with the date
+  // only when this card isn't under a day-group header. Built so an empty
+  // location never leaves a dangling "· 1:30 PM".
+  const timeStr = plan.time ? formatTime12(plan.time) : ''
+  const metaSupport = [showDate ? formatPlanDate(plan.date) : '', timeStr].filter(Boolean).join(' · ')
 
   return (
     <Pressable
@@ -114,21 +135,35 @@ export function PlanCard({
         {plan.name}
       </Text>
 
-      {/* 2 — LOCATION (own line, darker + semibold). "TBD" when empty. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 7 }}>
-        <MapPin size={13} weight="fill" color={plan.location ? '#555555' : '#CCCCCC'} />
-        <Text numberOfLines={1} style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: plan.location ? '#555555' : '#BBBBBB' }}>
-          {plan.location || 'TBD'}
-        </Text>
-      </View>
-
-      {/* 3 — TIME (muted line under location). */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
-        <Clock size={12} weight="regular" color="#AAAAAA" />
-        <Text numberOfLines={1} style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: '#AAAAAA' }}>
-          {formatPlanDate(plan.date)}{plan.time ? ` · ${plan.time}` : ''}
-        </Text>
-      </View>
+      {/* 2 — META: location + time on ONE line (date dropped under a day header).
+          Location semibold; time as muted support. Empty location → time alone
+          (Clock); nothing at all → "TBD". The location shrinks/ellipsizes so the
+          time is never truncated away. */}
+      {plan.location ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 7 }}>
+          <MapPin size={13} weight="fill" color="#888888" />
+          <Text numberOfLines={1} style={{ flexShrink: 1, marginLeft: 5, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#666666' }}>
+            {plan.location}
+          </Text>
+          {metaSupport ? (
+            <Text numberOfLines={1} style={{ flexShrink: 0, fontFamily: 'Inter_500Medium', fontSize: 13, color: '#999999' }}>
+              {` · ${metaSupport}`}
+            </Text>
+          ) : null}
+        </View>
+      ) : metaSupport ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 7 }}>
+          <Clock size={13} weight="regular" color="#AAAAAA" />
+          <Text numberOfLines={1} style={{ marginLeft: 5, fontFamily: 'Inter_500Medium', fontSize: 13, color: '#999999' }}>
+            {metaSupport}
+          </Text>
+        </View>
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 7 }}>
+          <MapPin size={13} weight="fill" color="#CCCCCC" />
+          <Text style={{ marginLeft: 5, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#BBBBBB' }}>TBD</Text>
+        </View>
+      )}
 
       {/* 4 — inline RSVP (reply-needed + handler) OR faces + count + status. */}
       {isPendingOpen && onRsvp ? (

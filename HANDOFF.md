@@ -320,7 +320,7 @@ Defined in `src/index.css` and Tailwind config:
 
 **Post-completion polish & redesign (PRs #40–#45):**
 - ✅ **Tab-bar bottom clipping fix** — every `(tabs)/*` scroll pads `insets.bottom + 72` (NativeTabs is translucent and overlays content; the SafeAreaProvider sits above the UITabBarController so `insets.bottom` is only the home indicator). PR #40.
-- ✅ **Home → day-filtered weekly overview** — greeting + week summary, amber/green day-chips, day-grouped feed, inline RSVP on reply-needed cards. PlanCard re-ranked (name → location → time → faint tier corner chip). PR #41.
+- ✅ **Home → day-filtered weekly overview** — greeting + week summary, amber/green day-chips, day-grouped feed, inline RSVP on reply-needed cards. PlanCard re-ranked (name → location → time → faint tier corner chip). PR #41. **Card meta is contextual (B1):** `PlanCard` takes a `showDate` prop (default `true`); under a day-group header the Home feed passes `showDate={false}`, dropping the now-redundant date and collapsing to **location + time on one line** (empty location → time alone, never a dangling "·"). The **"Later"** pile passes `showDate` (its header carries no date), so those cards keep theirs — date-hiding is contextual, not absolute.
 - ✅ **Plans → vertical agenda (Upcoming) + memory-card timeline (Past)** — date-rail agenda; Past grouped by month with "N plans · X% showed" + cover photos / tier-gradient fallbacks; **swipeable** Upcoming↔Past (paged horizontal ScrollView). PR #42.
 - ✅ **Event-detail revamp** (`app/plan/[id].tsx`, PR #45) — see the **Event detail page** subsection below. Built on the cover schema (PR #43) + create-flow cover picker (PR #44).
 

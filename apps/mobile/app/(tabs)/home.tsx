@@ -293,6 +293,8 @@ export default function Home() {
                     <PlanCard
                       key={plan.id}
                       plan={plan}
+                      // The day header above already shows the date — drop it on the card.
+                      showDate={false}
                       onPress={() => router.push(`/plan/${plan.id}` as any)}
                       onRsvp={(s) => handleInlineRsvp(plan, s)}
                     />
@@ -307,6 +309,8 @@ export default function Home() {
                     <PlanCard
                       key={plan.id}
                       plan={plan}
+                      // The "Later" header carries no date, so these keep their own.
+                      showDate
                       onPress={() => router.push(`/plan/${plan.id}` as any)}
                       onRsvp={(s) => handleInlineRsvp(plan, s)}
                     />
