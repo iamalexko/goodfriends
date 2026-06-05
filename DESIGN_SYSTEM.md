@@ -35,6 +35,8 @@ This is more premium than any colored palette, because **restraint reads as conf
 | `inkFaint` | `#BBBBBB` | Labels, captions, placeholders. |
 | `surface` | `#FFFFFF` | Card/sheet fills (solid white islands over cream — gives real shadow depth). |
 | `hairline` | `rgba(0,0,0,0.07)` | Dividers, card borders. |
+| `warmGreyTint` | `#F3EFE7` | Quiet chip/badge fills (structural chrome). Warm — never cold grey. |
+| `warmGrey` | `#9A8C74` | Muted text/labels in the cream family — the warm replacement for cold greys. |
 
 ### Signature accent (rare)
 
@@ -52,11 +54,11 @@ Status is communicated by **ink weight, position, and small text first** — col
 |---|---|---|---|
 | `success` | `#3D9970` (sage) | "In" / showed up | Prefer **ink + a check**; reserve sage for cases that genuinely need a positive hue. |
 | `gold` | `#D9A441` (ochre) | "Likely" / streaks | Small text/icon only. |
-| `info` | `#6B7F9E` (dusty blue) | Tier / informational | Faint; tier chips are grey by default (see §4). |
+| `info` | `#6B7F9E` (dusty blue) | Informational | Faint. (Tier chips are soft tints, not this — see §4.) |
 | `nudge` | `#E2683F` or ink | Nudge action | An **ink pill** with one clay touch — supersedes the old amber (mobile) / bubblegum (web) split. |
 | `danger` | `#C0392B` | Destructive / error | Only for genuine errors and destructive confirms. |
 
-> **Status by weight, not hue.** Zero-counts go muted grey (`#D8D2C8`) so non-zero values stand out without color. "In" is ink + a check, not a green pill. Color is reserved for real signal.
+> **Color carries meaning, not decoration.** Status, signals, reply-states, and **tier level** may use color (soft tinted chips); purely **structural/decorative chrome stays quiet**. Quiet means **warm-grey in the cream family** (`#F3EFE7` tint / `#9A8C74` text), **never cold dead grey** — the screen stays calm and warm, never austere. Tier chips are coloured soft tints, **one per tier** (see §4). Zero-counts still go muted so non-zero values stand out.
 
 ---
 
@@ -80,7 +82,7 @@ Status is communicated by **ink weight, position, and small text first** — col
 ## 4. Patterns & rules
 
 - **Cream, never white**, for backgrounds. White is reserved for card/sheet islands.
-- **Tier system:** tier gradients live on **covers** (content — fine to be colorful). Tier **chips** in the UI are monochrome — a faint grey "T1/T2/T3", all tiers identical faint treatment (T1 is _not_ a dark pill).
+- **Tier system:** tier gradients live on **covers** (content — fine to be colorful). Tier **chips** in the UI are **soft tinted, one colour per tier** (tier level is a meaningful signal): clay `#FBEAE3`/`#A23E1F` (T1, big deal), amber `#FEF3C7`/`#92400E` (T2, weekend), warm-grey `#F3EFE7`/`#9A8C74` (T3, low-key). Calm soft tints — tint bg + darker same-hue text, `borderRadius: 7`, no border — **never loud pills** (T1 is _not_ a dark/solid pill).
 - **Covers** resolve via the shared `resolveCover(plan)` helper: uploaded image → preset gradient → tier-gradient fallback. Preset gradients are content-as-color and may be fully saturated.
 - **Maps / links** render as ink with an underline (not bare orange/clay text).
 - **Empty states are the exception.** When there's no user content yet (new crew, no plans), the screen has no color to provide — so empty states _may_ use clay or a warm illustration deliberately, to avoid feeling clinical. This is the one place solid clay is welcome.

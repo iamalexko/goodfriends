@@ -3,6 +3,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from 'react-native'
@@ -174,6 +175,16 @@ export default function Home() {
   })
   const sortedDates = [...byDate.keys()].sort()
 
+  // Plans beyond this week group by MONTH (June / July…) instead of one "Later".
+  const byMonth = new Map<string, Plan[]>()
+  laterPlans.forEach((p) => {
+    const key = p.date.slice(0, 7) // 'YYYY-MM'
+    const arr = byMonth.get(key)
+    if (arr) arr.push(p)
+    else byMonth.set(key, [p])
+  })
+  const sortedMonths = [...byMonth.keys()].sort()
+
   const dayHasReply = (dateStr: string) =>
     (byDate.get(dateStr) || []).some((p) => !p.my_rsvp && p.status === 'open')
 
@@ -185,10 +196,22 @@ export default function Home() {
     return localNoon(dateStr).toLocaleDateString('en-AE', { weekday: 'short' })
   }
 
-  function dayHeaderLabel(dateStr: string) {
-    const wd = localNoon(dateStr).toLocaleDateString('en-AE', { weekday: 'short', day: 'numeric', month: 'short' })
-    const prefix = dateStr === todayStr ? 'Today' : dateStr === tomorrowStr ? 'Tomorrow' : ''
-    return prefix ? `${prefix} · ${wd}` : wd
+  // Relative-word-first header parts: a bold ink word + a muted numeric sub.
+  // Today/Tomorrow use LOCAL date math (todayStr/tomorrowStr via ymd), not UTC.
+  function dayHeaderParts(dateStr: string): { word: string; sub: string } {
+    const d = localNoon(dateStr)
+    const dayMonth = d.toLocaleDateString('en-AE', { day: 'numeric', month: 'short' }) // "7 Jun"
+    if (dateStr === todayStr || dateStr === tomorrowStr) {
+      const word = dateStr === todayStr ? 'Today' : 'Tomorrow'
+      return { word, sub: `${d.toLocaleDateString('en-AE', { weekday: 'short' })} · ${dayMonth}` }
+    }
+    return { word: d.toLocaleDateString('en-AE', { weekday: 'long' }), sub: dayMonth }
+  }
+
+  function monthLabel(key: string): string {
+    const d = localNoon(`${key}-01`)
+    const sameYear = key.slice(0, 4) === todayStr.slice(0, 4)
+    return d.toLocaleDateString('en-AE', sameYear ? { month: 'long' } : { month: 'long', year: 'numeric' })
   }
 
   const visibleDates = dayFilter === 'all' ? sortedDates : sortedDates.filter((d) => d === dayFilter)
@@ -223,7 +246,7 @@ export default function Home() {
             >
               Hey {firstName} {profile?.emoji || '👋'}
             </Text>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: totalNeedsReply ? '#FB923C' : '#34D399', marginTop: 3 }}>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: totalNeedsReply ? '#FB923C' : '#2E7355', marginTop: 3 }}>
               {totalNeedsReply > 0
                 ? `${totalNeedsReply} plan${totalNeedsReply > 1 ? 's' : ''} need your reply this week`
                 : "You're all caught up ✓"}
@@ -288,11 +311,13 @@ export default function Home() {
             <>
               {visibleDates.map((d) => (
                 <View key={d}>
-                  <Text style={dayHeaderStyle}>{dayHeaderLabel(d)}</Text>
+                  <FeedHeader {...dayHeaderParts(d)} />
                   {(byDate.get(d) || []).map((plan) => (
                     <PlanCard
                       key={plan.id}
                       plan={plan}
+                      // The dated day header above already shows the date — drop it on the card.
+                      showDate={false}
                       onPress={() => router.push(`/plan/${plan.id}` as any)}
                       onRsvp={(s) => handleInlineRsvp(plan, s)}
                     />
@@ -300,19 +325,23 @@ export default function Home() {
                 </View>
               ))}
 
-              {dayFilter === 'all' && laterPlans.length > 0 && (
-                <View>
-                  <Text style={dayHeaderStyle}>Later</Text>
-                  {laterPlans.map((plan) => (
-                    <PlanCard
-                      key={plan.id}
-                      plan={plan}
-                      onPress={() => router.push(`/plan/${plan.id}` as any)}
-                      onRsvp={(s) => handleInlineRsvp(plan, s)}
-                    />
-                  ))}
-                </View>
-              )}
+              {/* Beyond this week: one group per month. A month doesn't pin the exact
+                  day, so these cards keep their date (showDate). */}
+              {dayFilter === 'all' &&
+                sortedMonths.map((mk, mi) => (
+                  <View key={mk}>
+                    <FeedHeader word={monthLabel(mk)} sub={mi === 0 ? 'later' : undefined} />
+                    {(byMonth.get(mk) || []).map((plan) => (
+                      <PlanCard
+                        key={plan.id}
+                        plan={plan}
+                        showDate
+                        onPress={() => router.push(`/plan/${plan.id}` as any)}
+                        onRsvp={(s) => handleInlineRsvp(plan, s)}
+                      />
+                    ))}
+                  </View>
+                ))}
             </>
           )}
         </Animated.ScrollView>
@@ -337,24 +366,22 @@ function DayChip({
   selected: boolean
   onPress: () => void
 }) {
+  // Status colours stay (they signal meaning): amber = reply-needed, sage = handled,
+  // warm-grey = neutral "All". Selected → ink chip with a light inverted badge.
   const countBg = selected
-    ? state === 'reply'
-      ? '#FB923C'
-      : state === 'done'
-        ? '#34D399'
-        : 'rgba(255,255,255,0.25)'
+    ? 'rgba(255,255,255,0.22)'
     : state === 'reply'
       ? '#FEF3C7'
       : state === 'done'
-        ? '#DCFCE7'
-        : 'rgba(0,0,0,0.06)'
+        ? '#DCEFE6'
+        : '#F0EBE2'
   const countFg = selected
     ? '#FFFFFF'
     : state === 'reply'
       ? '#B45309'
       : state === 'done'
-        ? '#16A34A'
-        : '#888888'
+        ? '#2E7355'
+        : '#9A8C74'
   return (
     <Pressable
       onPress={onPress}
@@ -381,14 +408,17 @@ function DayChip({
   )
 }
 
-const dayHeaderStyle = {
-  fontFamily: 'Inter_700Bold' as const,
-  fontSize: 8,
-  fontWeight: '700' as const,
-  letterSpacing: 0.8,
-  textTransform: 'uppercase' as const,
-  color: '#CCCCCC',
-  paddingHorizontal: 20,
-  paddingTop: 6,
-  paddingBottom: 4,
+// Relative-word-first feed header: a bold ink word + a muted warm-grey numeric
+// sub, then a hairline rule filling the remaining width. Replaces the old small
+// all-caps grey label.
+function FeedHeader({ word, sub }: { word: string; sub?: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 9 }}>
+      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, fontWeight: '600', color: '#111111', letterSpacing: -0.2 }}>{word}</Text>
+      {sub ? (
+        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#9A8C74', marginLeft: 7 }}>{sub}</Text>
+      ) : null}
+      <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(0,0,0,0.1)', marginLeft: 12 }} />
+    </View>
+  )
 }

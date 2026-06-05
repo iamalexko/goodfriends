@@ -26,19 +26,32 @@ export type Plan = {
   photos?: { cover: string | null; count: number }
 }
 
-// Tier chip: short T1/T2/T3 label, but each tier keeps its distinct colour
-// (matching the Pill tier1/2/3 variants) — dark T1, amber T2, grey T3.
+// Tier is a meaningful signal, so chips stay coloured — but a coherent set of
+// SOFT warm tints (tint bg + darker same-hue text), not loud pills: clay = big
+// deal, amber = weekend plan, warm-grey = low-key. One soft tint per tier.
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: 'T1', 2: 'T2', 3: 'T3' }
-const TIER_CHIP: Record<1 | 2 | 3, { bg: string; fg: string; border?: string }> = {
-  1: { bg: '#111111', fg: '#FFFFFF' },
-  2: { bg: '#FEF3C7', fg: '#92400E', border: '#FCD34D' },
-  3: { bg: '#F3F4F6', fg: '#AAAAAA' },
+const TIER_CHIP: Record<1 | 2 | 3, { bg: string; fg: string }> = {
+  1: { bg: '#FBEAE3', fg: '#A23E1F' },
+  2: { bg: '#FEF3C7', fg: '#92400E' },
+  3: { bg: '#F3EFE7', fg: '#9A8C74' },
 }
 
+// Card date for month groups: weekday + day only ("Sat 13") — the month header
+// already supplies the month. Parsed at local noon so the weekday never TZ-shifts.
 function formatPlanDate(dateStr: string) {
-  const d = new Date(dateStr)
+  const d = new Date(`${dateStr}T12:00:00`)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-AE', { weekday: 'short', day: 'numeric', month: 'short' })
+  return `${d.toLocaleDateString('en-AE', { weekday: 'short' })} ${d.getDate()}`
+}
+
+// "13:30" (24h, as stored) → "1:30 PM". Matches the detail page's formatter.
+function formatTime12(t: string) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t)
+  if (!m) return t
+  let h = parseInt(m[1], 10)
+  const ap = h >= 12 ? 'PM' : 'AM'
+  h = h % 12 || 12
+  return `${h}:${m[2]} ${ap}`
 }
 
 export function PlanCard({
@@ -46,15 +59,26 @@ export function PlanCard({
   onPress,
   onRsvp,
   variant = 'home',
+  // The date is contextual, not absolute: a day-group header above the card
+  // already shows the date, so the day-grouped Home feed passes showDate={false}.
+  // Ungrouped contexts (search, a flat list, the "Later" pile) keep it (default).
+  showDate = true,
 }: {
   plan: Plan
   onPress?: () => void
   onRsvp?: (status: 'in' | 'no') => void
   variant?: 'home' | 'plans'
+  showDate?: boolean
 }) {
   // Pending border only for OPEN plans you haven't replied to — past or
   // cancelled cards never get the orange glow.
   const isPendingOpen = !plan.my_rsvp && plan.status === 'open'
+
+  // Muted support text trailing the location: the time, prefixed with the date
+  // only when this card isn't under a day-group header. Built so an empty
+  // location never leaves a dangling "· 1:30 PM".
+  const timeStr = plan.time ? formatTime12(plan.time) : ''
+  const metaSupport = [showDate ? formatPlanDate(plan.date) : '', timeStr].filter(Boolean).join(' · ')
 
   return (
     <Pressable
@@ -84,11 +108,9 @@ export function PlanCard({
           top: 13,
           right: 14,
           backgroundColor: TIER_CHIP[plan.tier].bg,
-          borderWidth: TIER_CHIP[plan.tier].border ? 1 : 0,
-          borderColor: TIER_CHIP[plan.tier].border,
           paddingHorizontal: 7,
           paddingVertical: 2,
-          borderRadius: 6,
+          borderRadius: 7,
         }}
       >
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 8, fontWeight: '700', letterSpacing: 0.4, color: TIER_CHIP[plan.tier].fg }}>
@@ -114,21 +136,35 @@ export function PlanCard({
         {plan.name}
       </Text>
 
-      {/* 2 — LOCATION (own line, darker + semibold). "TBD" when empty. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 7 }}>
-        <MapPin size={13} weight="fill" color={plan.location ? '#555555' : '#CCCCCC'} />
-        <Text numberOfLines={1} style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: plan.location ? '#555555' : '#BBBBBB' }}>
-          {plan.location || 'TBD'}
-        </Text>
-      </View>
-
-      {/* 3 — TIME (muted line under location). */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
-        <Clock size={12} weight="regular" color="#AAAAAA" />
-        <Text numberOfLines={1} style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: '#AAAAAA' }}>
-          {formatPlanDate(plan.date)}{plan.time ? ` · ${plan.time}` : ''}
-        </Text>
-      </View>
+      {/* 2 — META: location + time on ONE line (date dropped under a day header).
+          Location semibold; time as muted support. Empty location → time alone
+          (Clock); nothing at all → "TBD". The location shrinks/ellipsizes so the
+          time is never truncated away. */}
+      {plan.location ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 7 }}>
+          <MapPin size={13} weight="fill" color="#888888" />
+          <Text numberOfLines={1} style={{ flexShrink: 1, marginLeft: 5, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#666666' }}>
+            {plan.location}
+          </Text>
+          {metaSupport ? (
+            <Text numberOfLines={1} style={{ flexShrink: 0, fontFamily: 'Inter_500Medium', fontSize: 13, color: '#999999' }}>
+              {` · ${metaSupport}`}
+            </Text>
+          ) : null}
+        </View>
+      ) : metaSupport ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 7 }}>
+          <Clock size={13} weight="regular" color="#AAAAAA" />
+          <Text numberOfLines={1} style={{ marginLeft: 5, fontFamily: 'Inter_500Medium', fontSize: 13, color: '#999999' }}>
+            {metaSupport}
+          </Text>
+        </View>
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 7 }}>
+          <MapPin size={13} weight="fill" color="#CCCCCC" />
+          <Text style={{ marginLeft: 5, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#BBBBBB' }}>TBD</Text>
+        </View>
+      )}
 
       {/* 4 — inline RSVP (reply-needed + handler) OR faces + count + status. */}
       {isPendingOpen && onRsvp ? (
