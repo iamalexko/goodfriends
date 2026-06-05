@@ -1,6 +1,7 @@
-import { Modal, Pressable, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { EMOJIS } from '@goodfriends/shared'
+import { GlassPanel } from './GlassSurface'
 
 // Bottom-sheet emoji picker used on Profile (and reusable from anywhere
 // else that needs to swap an emoji). Mirrors the web Profile's picker:
@@ -40,14 +41,15 @@ export function EmojiPicker({
           // Inner stops the backdrop tap from dismissing the sheet.
           onPress={(e) => e.stopPropagation?.()}
           style={{
-            backgroundColor: '#FFFBF5',
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            overflow: 'hidden',
             paddingHorizontal: 20,
             paddingTop: 16,
             paddingBottom: Math.max(24, insets.bottom + 12),
           }}
         >
+          <GlassPanel style={StyleSheet.absoluteFill} />
           <View
             style={{
               width: 36,
