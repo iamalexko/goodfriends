@@ -20,7 +20,7 @@ import { Loader } from '../../components/Loader'
 import { EmojiBurst } from '../../components/EmojiBurst'
 import { GlassSurface } from '../../components/GlassSurface'
 
-const HERO_H = 240
+const HERO_H = 266
 
 // RSVP options + selected styling — mirrors apps/web/src/screens/PlanDetail.jsx
 // exactly (pastel fill + coloured border + soft glow; ink label + grey sub).
