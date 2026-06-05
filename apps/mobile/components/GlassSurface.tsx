@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { StyleSheet, ViewStyle, StyleProp } from 'react-native'
+import { StyleSheet, View, ViewStyle, StyleProp } from 'react-native'
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 
@@ -57,6 +57,36 @@ export function GlassSurface({
       ]}
     >
       {children}
+    </BlurView>
+  )
+}
+
+// Glass *background panel* for bottom-sheets. Same one-time isLiquidGlassAvailable()
+// guard as GlassSurface (one place owns it), but tuned as a full-bleed sheet
+// backdrop: a stronger blur fallback + a faint cream veil so dark text on the
+// SOLID content layered above stays legible over the sheet's dim scrim. Use it as
+// an absolute-fill layer BEHIND solid content (gallery-wall rule) — never wrap the
+// content itself, and never opacity-animate it (the documented header failure).
+export function GlassPanel({
+  style,
+  intensity = 80,
+  veil,
+}: {
+  style?: StyleProp<ViewStyle>
+  intensity?: number
+  veil?: number
+}) {
+  const tint = veil ?? (LIQUID_GLASS ? 0.34 : 0.14)
+  if (LIQUID_GLASS) {
+    return (
+      <GlassView style={style} glassEffectStyle="regular">
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(252,251,247,${tint})` }]} />
+      </GlassView>
+    )
+  }
+  return (
+    <BlurView intensity={intensity} tint="light" style={style}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(252,251,247,${tint})` }]} />
     </BlurView>
   )
 }

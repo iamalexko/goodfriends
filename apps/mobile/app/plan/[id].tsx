@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -18,7 +18,8 @@ import { EmojiAvatar } from '../../components/EmojiAvatar'
 import { Pill } from '../../components/Pill'
 import { Loader } from '../../components/Loader'
 import { EmojiBurst } from '../../components/EmojiBurst'
-import { GlassSurface } from '../../components/GlassSurface'
+import { GlassSurface, GlassPanel } from '../../components/GlassSurface'
+import { CenterDialog } from '../../components/CenterDialog'
 
 const HERO_H = 266
 
@@ -157,6 +158,7 @@ export default function PlanDetail() {
   const [editingPost, setEditingPost] = useState<{ id: string; content: string } | null>(null)
   const [reactionPickerId, setReactionPickerId] = useState<string | null>(null)
   const [actionSheetPost, setActionSheetPost] = useState<Post | null>(null)
+  const [deletePostTarget, setDeletePostTarget] = useState<Post | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const composerInputRef = useRef<TextInput>(null)
 
@@ -679,14 +681,8 @@ export default function PlanDetail() {
 
   function confirmDeletePost(post: Post) {
     setActionSheetPost(null)
-    Alert.alert(
-      post.type === 'photo' ? 'Delete this photo?' : 'Delete this comment?',
-      'This can’t be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => performDeletePost(post) },
-      ],
-    )
+    // Center-fade confirmation dialog (see CenterDialog below), not a native Alert.
+    setDeletePostTarget(post)
   }
 
   async function performDeletePost(post: Post) {
@@ -1251,7 +1247,8 @@ export default function PlanDetail() {
       {/* ---- Edit modal ---- */}
       <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => !savingEdit && setEditOpen(false)}>
         <Pressable onPress={() => !savingEdit && setEditOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '90%' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '90%' }}>
+            <GlassPanel style={StyleSheet.absoluteFill} />
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 16 }} />
             <ScrollView keyboardShouldPersistTaps="handled">
               <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', marginBottom: 14 }}>Edit plan</Text>
@@ -1305,67 +1302,75 @@ export default function PlanDetail() {
         </Pressable>
       </Modal>
 
-      {/* ---- Close + attendance modal ---- */}
-      <Modal visible={closeOpen} transparent animationType="slide" onRequestClose={() => !closing && setCloseOpen(false)}>
-        <Pressable onPress={() => !closing && setCloseOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '90%' }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 16 }} />
-            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', marginBottom: 4 }}>Who showed up?</Text>
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', marginBottom: 14 }}>Tick everyone who came. Closing awards points and updates scores.</Text>
-            <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
-              {sortedRsvps.map((r) => {
-                const came = !!attendance[r.user_id]
-                return (
-                  <Pressable
-                    key={r.user_id}
-                    onPress={() => setAttendance((p) => ({ ...p, [r.user_id]: !p[r.user_id] }))}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' }}
-                  >
-                    <EmojiAvatar emoji={r.profiles?.emoji || '😎'} size="sm" />
-                    <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#111111' }}>{r.profiles?.display_name || 'Someone'}</Text>
-                    <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: came ? '#34D399' : 'transparent', borderColor: came ? '#34D399' : '#DDDDDD' }}>
-                      {came && <Check size={14} weight="bold" color="#FFFFFF" />}
-                    </View>
-                  </Pressable>
-                )
-              })}
-            </ScrollView>
-            <Pressable onPress={closeEvent} disabled={closing} style={{ marginTop: 16, backgroundColor: '#111111', borderRadius: 999, paddingVertical: 15, alignItems: 'center', opacity: closing ? 0.5 : 1 }}>
-              <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>{closing ? 'Closing…' : 'Close plan'}</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* ---- Close + attendance — confirmation (center-fade dialog) ---- */}
+      <CenterDialog
+        visible={closeOpen}
+        onClose={() => !closing && setCloseOpen(false)}
+        title="Who showed up?"
+        subtitle="Tick everyone who came. Closing awards points and updates scores — this can’t be undone."
+        primaryLabel="Close plan"
+        onPrimary={closeEvent}
+        primaryBusy={closing}
+        primaryBusyLabel="Closing…"
+      >
+        <ScrollView style={{ maxHeight: 300 }} keyboardShouldPersistTaps="handled">
+          {sortedRsvps.map((r) => {
+            const came = !!attendance[r.user_id]
+            return (
+              <Pressable
+                key={r.user_id}
+                onPress={() => setAttendance((p) => ({ ...p, [r.user_id]: !p[r.user_id] }))}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' }}
+              >
+                <EmojiAvatar emoji={r.profiles?.emoji || '😎'} size="sm" />
+                <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#111111' }}>{r.profiles?.display_name || 'Someone'}</Text>
+                <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: came ? '#34D399' : 'transparent', borderColor: came ? '#34D399' : '#DDDDDD' }}>
+                  {came && <Check size={14} weight="bold" color="#FFFFFF" />}
+                </View>
+              </Pressable>
+            )
+          })}
+        </ScrollView>
+      </CenterDialog>
 
-      {/* ---- Delete / cancel confirm modal ---- */}
-      <Modal visible={deleteOpen} transparent animationType="slide" onRequestClose={() => !deleting && setDeleteOpen(false)}>
-        <Pressable onPress={() => !deleting && setDeleteOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12) }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 16 }} />
-            <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', marginBottom: 4 }}>
-              {isClosed ? 'Delete this plan?' : 'Cancel this plan?'}
-            </Text>
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', marginBottom: 18 }}>
-              {isClosed
-                ? 'This permanently removes the plan and its records. This can’t be undone.'
-                : 'Everyone invited will be notified it’s cancelled. This can’t be undone.'}
-            </Text>
-            <Pressable onPress={deletePlan} disabled={deleting} style={{ backgroundColor: '#B91C1C', borderRadius: 999, paddingVertical: 15, alignItems: 'center', opacity: deleting ? 0.5 : 1 }}>
-              <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
-                {deleting ? 'Deleting…' : isClosed ? 'Delete plan' : 'Cancel plan'}
-              </Text>
-            </Pressable>
-            <Pressable onPress={() => !deleting && setDeleteOpen(false)} style={{ paddingVertical: 12, alignItems: 'center', marginTop: 4 }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, fontWeight: '600', color: 'rgba(17,17,17,0.6)' }}>Keep it</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* ---- Delete / cancel plan — confirmation (center-fade dialog) ---- */}
+      <CenterDialog
+        visible={deleteOpen}
+        onClose={() => !deleting && setDeleteOpen(false)}
+        title={isClosed ? 'Delete this plan?' : 'Cancel this plan?'}
+        subtitle={
+          isClosed
+            ? 'This permanently removes the plan and its records. This can’t be undone.'
+            : 'Everyone invited will be notified it’s cancelled. This can’t be undone.'
+        }
+        primaryLabel={isClosed ? 'Delete plan' : 'Cancel plan'}
+        onPrimary={deletePlan}
+        primaryDanger
+        primaryBusy={deleting}
+        primaryBusyLabel="Deleting…"
+        cancelLabel="Keep it"
+      />
+
+      {/* ---- Delete a Moment post — confirmation (center-fade dialog) ---- */}
+      <CenterDialog
+        visible={!!deletePostTarget}
+        onClose={() => setDeletePostTarget(null)}
+        title={deletePostTarget?.type === 'photo' ? 'Delete this photo?' : 'Delete this comment?'}
+        subtitle="This can’t be undone."
+        primaryLabel="Delete"
+        primaryDanger
+        onPrimary={() => {
+          const target = deletePostTarget
+          setDeletePostTarget(null)
+          if (target) performDeletePost(target)
+        }}
+      />
 
       {/* ---- Post action sheet (own posts) ---- */}
       <Modal visible={!!actionSheetPost} transparent animationType="slide" onRequestClose={() => setActionSheetPost(null)}>
         <Pressable onPress={() => setActionSheetPost(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12, paddingBottom: Math.max(24, insets.bottom + 12), paddingHorizontal: 12 }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden', paddingTop: 12, paddingBottom: Math.max(24, insets.bottom + 12), paddingHorizontal: 12 }}>
+            <GlassPanel style={StyleSheet.absoluteFill} />
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 12 }} />
             {actionSheetPost?.type === 'comment' && (
               <Pressable onPress={() => actionSheetPost && startEditing(actionSheetPost)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16 }}>
@@ -1404,9 +1409,10 @@ export default function PlanDetail() {
       </Modal>
 
       {/* ---- SLICE C — Plan hype reactor ---- */}
-      <Modal visible={planReactorOpen} transparent animationType="fade" onRequestClose={() => setPlanReactorOpen(false)}>
-        <Pressable onPress={() => setPlanReactorOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12) }}>
+      <Modal visible={planReactorOpen} transparent animationType="slide" onRequestClose={() => setPlanReactorOpen(false)}>
+        <Pressable onPress={() => setPlanReactorOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12) }}>
+            <GlassPanel style={StyleSheet.absoluteFill} />
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 16 }} />
             <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 16, fontWeight: '800', color: '#111111', marginBottom: 14 }}>Hype it up</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -1426,7 +1432,8 @@ export default function PlanDetail() {
       {/* ---- SLICE D — Guest roster sheet ---- */}
       <Modal visible={guestSheetOpen} transparent animationType="slide" onRequestClose={() => setGuestSheetOpen(false)}>
         <Pressable onPress={() => setGuestSheetOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '85%' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '85%' }}>
+            <GlassPanel style={StyleSheet.absoluteFill} />
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 14 }} />
             <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111', marginBottom: 12 }}>The guest list</Text>
             <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
@@ -1488,7 +1495,8 @@ export default function PlanDetail() {
       {/* ---- SLICE F — Change cover sheet (organiser) ---- */}
       <Modal visible={coverSheetOpen} transparent animationType="slide" onRequestClose={() => !coverBusy && setCoverSheetOpen(false)}>
         <Pressable onPress={() => !coverBusy && setCoverSheetOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '85%' }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(24, insets.bottom + 12), maxHeight: '85%' }}>
+            <GlassPanel style={StyleSheet.absoluteFill} />
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 14 }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111' }}>Change cover</Text>
@@ -1537,7 +1545,8 @@ export default function PlanDetail() {
       {/* ---- Organiser action menu (hero ⋯) ---- */}
       <Modal visible={organiserMenuOpen} transparent animationType="slide" onRequestClose={() => setOrganiserMenuOpen(false)}>
         <Pressable onPress={() => setOrganiserMenuOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: '#FFFBF5', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12, paddingBottom: Math.max(24, insets.bottom + 12), paddingHorizontal: 12 }}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden', paddingTop: 12, paddingBottom: Math.max(24, insets.bottom + 12), paddingHorizontal: 12 }}>
+            <GlassPanel style={StyleSheet.absoluteFill} />
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 12 }} />
             {!isClosed && (
               <Pressable onPress={() => { setOrganiserMenuOpen(false); openEdit() }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16 }}>
