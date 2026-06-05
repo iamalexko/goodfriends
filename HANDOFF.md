@@ -21,7 +21,7 @@ Monorepo, npm workspaces:
 - **`packages/shared`** — platform-agnostic constants (`COLORS`, `RSVP_OPTIONS`, `EMOJIS`) + utils (`getMemberTags`, `getGroupTags`, `getTimeTag`, `formatTimeAgo`, `getPriorityScore`). Consumed via `@goodfriends/shared`.
 - **Backend**: Supabase (Postgres 17, RLS, Realtime, Edge Functions, Storage, pg_cron)
 - **Hosting (web)**: Vercel auto-deploys from `main`, root `vercel.json` builds `apps/web/`
-- **Mobile distribution**: local native build for now (no TestFlight / EAS yet)
+- **Mobile distribution**: local native build; **EAS Build → TestFlight config is ready** (`apps/mobile/eas.json`) — build not yet run (needs Apple creds). See Build environment gotchas → EAS.
 - **Repo**: https://github.com/iamalexko/goodfriends (public)
 - **Live web URL**: https://goodfriends-git-main-alex-ko-projects.vercel.app
 
@@ -492,7 +492,15 @@ A "premium invitation" page. All organiser/Moments logic is unchanged from the o
 - **UTF-8 locale required for `expo prebuild`**: `export LANG=en_US.UTF-8` in the shell first, otherwise `pod install` crashes on ASCII-8BIT encoding.
 - **`apps/mobile/ios/` is gitignored.** `app.json` is the single source of truth for native config — regenerate locally via `npx expo prebuild --platform ios --clean`.
 - **`react-native`, `react`, and `semver@^7` are hoisted to the root `package.json`** (deps + `overrides`). Without that, npm workspaces leave RN only in `apps/mobile/node_modules` and the hoisted `nativewind` / `react-native-css-interop` can't find it. `semver` needed v7 for `functions/satisfies` which `react-native-reanimated`'s worklets script imports.
-- **Metro is workspace-aware** via `apps/mobile/metro.config.js` — `watchFolders` covers the workspace root, `nodeModulesPaths` covers both local + root `node_modules`.
+- **Metro is workspace-aware** via `apps/mobile/metro.config.js` — `watchFolders` covers the workspace root, `nodeModulesPaths` covers both local + root `node_modules`. (This is also what lets **EAS cloud builds** resolve the hoisted RN/react — don't remove it.)
+
+#### EAS Build → TestFlight (`apps/mobile/eas.json`)
+
+- **Profiles:** `production` = `distribution: store` + `autoIncrement: true`. `cli.appVersionSource: "local"`, so `ios.buildNumber` in `app.json` is the source of truth and EAS bumps it each build (kills "duplicate build number" rejections; it writes the bumped value back to `app.json`). Export compliance is pre-answered via `ITSAppUsesNonExemptEncryption: false`.
+- **Managed workflow** — `ios/` is gitignored, so EAS runs `expo prebuild` in the cloud from `app.json`. Don't commit `ios/`.
+- **Monorepo:** EAS auto-detects the npm workspace from the committed root `package-lock.json` and installs at the **repo root**; the workspace-aware `metro.config.js` resolves hoisted deps. Watch the first build's log for the install running at the root.
+- **⚠️ Top risk:** `expo-glass-effect` needs the **iOS 26 SDK / Xcode 26**. If the cloud build fails compiling it, pin a recent image in the `production` profile (e.g. `"ios": { "image": "latest" }`).
+- **First run:** `eas init` once (creates the EAS project + writes `expo.extra.eas.projectId` into `app.json`). Push notifications / `aps-environment` deliberately NOT added (deferred).
 
 ### Component reuse
 
