@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -18,6 +18,7 @@ import { EmojiAvatar } from '../../components/EmojiAvatar'
 import { Pill } from '../../components/Pill'
 import { Loader } from '../../components/Loader'
 import { EmojiBurst } from '../../components/EmojiBurst'
+import { GlassSurface } from '../../components/GlassSurface'
 
 const HERO_H = 240
 
@@ -805,6 +806,7 @@ export default function PlanDetail() {
 
   // ---- Derived for the revamp ----
   const cover = resolveCover(plan)
+  const heroTone = heroControlTone(cover)
   const tierEmoji = plan.tier === 1 ? '🎉' : plan.tier === 2 ? '🌅' : '☕'
   const heroWhen = `${formatPlanDate(plan.date)}${plan.time ? ` · ${plan.time}` : ''}`.toUpperCase()
 
@@ -1237,10 +1239,12 @@ export default function PlanDetail() {
       )}
 
       {/* ===== Floating controls (over the scroll) ===== */}
-      <FloatingBack onPress={goBack} insets={insets} />
+      <FloatingBack onPress={goBack} insets={insets} iconColor={heroTone.iconColor} scrim={heroTone.scrim} />
       {isOrganiser && (
-        <Pressable onPress={() => setOrganiserMenuOpen(true)} style={{ position: 'absolute', top: insets.top + 6, right: 14, width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}>
-          <DotsThree size={20} weight="bold" color="#FFFFFF" />
+        <Pressable onPress={() => setOrganiserMenuOpen(true)} hitSlop={8} style={{ position: 'absolute', top: insets.top + 6, right: 14, zIndex: 50 }}>
+          <HeroGlassCircle scrim={heroTone.scrim}>
+            <DotsThree size={20} weight="bold" color={heroTone.iconColor} />
+          </HeroGlassCircle>
         </Pressable>
       )}
 
@@ -1559,14 +1563,68 @@ export default function PlanDetail() {
   )
 }
 
-function FloatingBack({ onPress, insets, dark }: { onPress: () => void; insets: { top: number }; dark?: boolean }) {
+// Hero controls float over the cover. To stay legible on ANY cover they sit on a
+// STATIC liquid-glass circle — a GlassView when iOS 26 Liquid Glass is available,
+// a BlurView fallback otherwise — both routed through GlassSurface, which owns the
+// one-time isLiquidGlassAvailable() guard (never call GlassView directly). The
+// circle ALSO carries a scrim that adapts to the cover (see heroControlTone): a
+// dark veil + white icon over dark covers/photos, a light frost + ink icon over
+// light covers — the glass lightens over bright backgrounds and would otherwise
+// wash a fixed-white icon out. Deliberately NOT opacity-animated — animating
+// glass is what broke the abandoned fade-on-scroll header (see HANDOFF gotchas).
+const HERO_BTN = 36
+
+// Perceived luminance of a #rrggbb hex, 0 (black) → 1 (white).
+function luma(hex: string) {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+}
+
+// Pick the hero-control treatment from the resolved cover. Gradients are sampled
+// from their two stops; photos can't be luminance-sampled so they take the dark
+// (white-icon + dark-scrim) treatment, whose scrim keeps the icon legible even
+// over bright images.
+function heroControlTone(cover: { type: string; colors?: string[] }) {
+  const onLight =
+    cover.type === 'gradient' &&
+    !!cover.colors &&
+    (luma(cover.colors[0]) + luma(cover.colors[cover.colors.length - 1])) / 2 > 0.62
+  return onLight
+    ? { iconColor: '#1A1A1A', scrim: 'rgba(255,255,255,0.34)' }
+    : { iconColor: '#FFFFFF', scrim: 'rgba(0,0,0,0.26)' }
+}
+
+function HeroGlassCircle({ scrim, children }: { scrim: string; children: ReactNode }) {
   return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={8}
-      style={{ position: 'absolute', top: insets.top + 6, left: 14, width: 38, height: 38, borderRadius: 19, backgroundColor: dark ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
-    >
-      <CaretLeft size={18} weight="bold" color={dark ? '#111111' : '#FFFFFF'} />
+    <GlassSurface radius={HERO_BTN / 2} style={{ width: HERO_BTN, height: HERO_BTN, alignItems: 'center', justifyContent: 'center' }}>
+      <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scrim }} />
+      {children}
+    </GlassSurface>
+  )
+}
+
+function FloatingBack({ onPress, insets, dark, iconColor = '#FFFFFF', scrim = 'rgba(0,0,0,0.26)' }: { onPress: () => void; insets: { top: number }; dark?: boolean; iconColor?: string; scrim?: string }) {
+  // `dark` = rendered over the cream loading/error screen, not a cover. Frosted
+  // glass needs rich content behind it, so use a plain tinted circle there.
+  if (dark) {
+    return (
+      <Pressable
+        onPress={onPress}
+        hitSlop={8}
+        style={{ position: 'absolute', top: insets.top + 6, left: 14, width: HERO_BTN, height: HERO_BTN, borderRadius: HERO_BTN / 2, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+      >
+        <CaretLeft size={18} weight="bold" color="#111111" />
+      </Pressable>
+    )
+  }
+  return (
+    <Pressable onPress={onPress} hitSlop={8} style={{ position: 'absolute', top: insets.top + 6, left: 14, zIndex: 50 }}>
+      <HeroGlassCircle scrim={scrim}>
+        <CaretLeft size={18} weight="bold" color={iconColor} />
+      </HeroGlassCircle>
     </Pressable>
   )
 }
