@@ -269,6 +269,12 @@ Defined in `src/index.css` and Tailwind config:
 - **Sage** (calm green): `#3D9970`, used for the "In/coming" guest count.
 - **Ochre** (calm amber): `#D9A441` for the "Likely" guest count.
 - **RSVP selector** intentionally stays the **web-exact** pastel-per-status (mint `#DCFCE7`/`#16A34A`, amber `#FEF3C7`/`#F59E0B`, grey `#F3F4F6`/`#9CA3AF` + soft glow) — the one place we mirror web exactly. Don't "clay" it.
+
+**Brand mark + app icon** (mobile):
+- The mark is the **no-eyes smile dot** — an ink `#111` circle with a cream `#FFFBF5` **negative-space smile** (no eyes); the calm/subtle face. The **vector source of truth** lives in **`apps/mobile/assets/brand/`**: `goodfriends_icon.svg` (opaque, cream bg) + `goodfriends_mark.svg` (transparent, smile masked out). Regenerate PNGs from these.
+- **App icon** = `assets/goodfriends_icon_1024.png` — flat 1024², **opaque**, square corners (iOS masks its own rounding). `app.json → expo.icon` (no separate `ios.icon`). ⚠️ **iOS rejects transparent app icons**, so the icon field must always be an opaque PNG — never a `*_transparent_*` mark.
+- **Transparent marks** (`*_mark_*_transparent_1024.png`) are for **in-app / splash use only.** Splash = the ink transparent mark centred on cream `#FFFBF5` via the `expo-splash-screen` plugin block in `app.json`.
+- Icon/splash are native config → `expo prebuild --platform ios --clean` then `expo run:ios` (with `LANG=en_US.UTF-8`, per the build gotcha). Android keeps its own `adaptiveIcon` (foreground/background/monochrome) — not updated by this change.
 - **Plan covers** resolve via `resolveCover()` in `@goodfriends/shared` — see the **Event detail page** subsection under Mobile app.
 
 ---
