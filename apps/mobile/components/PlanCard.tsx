@@ -26,19 +26,22 @@ export type Plan = {
   photos?: { cover: string | null; count: number }
 }
 
-// Tier chip: short T1/T2/T3 label, but each tier keeps its distinct colour
-// (matching the Pill tier1/2/3 variants) — dark T1, amber T2, grey T3.
+// Tier is a meaningful signal, so chips stay coloured — but a coherent set of
+// SOFT warm tints (tint bg + darker same-hue text), not loud pills: clay = big
+// deal, amber = weekend plan, warm-grey = low-key. One soft tint per tier.
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: 'T1', 2: 'T2', 3: 'T3' }
-const TIER_CHIP: Record<1 | 2 | 3, { bg: string; fg: string; border?: string }> = {
-  1: { bg: '#111111', fg: '#FFFFFF' },
-  2: { bg: '#FEF3C7', fg: '#92400E', border: '#FCD34D' },
-  3: { bg: '#F3F4F6', fg: '#AAAAAA' },
+const TIER_CHIP: Record<1 | 2 | 3, { bg: string; fg: string }> = {
+  1: { bg: '#FBEAE3', fg: '#A23E1F' },
+  2: { bg: '#FEF3C7', fg: '#92400E' },
+  3: { bg: '#F3EFE7', fg: '#9A8C74' },
 }
 
+// Card date for month groups: weekday + day only ("Sat 13") — the month header
+// already supplies the month. Parsed at local noon so the weekday never TZ-shifts.
 function formatPlanDate(dateStr: string) {
-  const d = new Date(dateStr)
+  const d = new Date(`${dateStr}T12:00:00`)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-AE', { weekday: 'short', day: 'numeric', month: 'short' })
+  return `${d.toLocaleDateString('en-AE', { weekday: 'short' })} ${d.getDate()}`
 }
 
 // "13:30" (24h, as stored) → "1:30 PM". Matches the detail page's formatter.
@@ -105,11 +108,9 @@ export function PlanCard({
           top: 13,
           right: 14,
           backgroundColor: TIER_CHIP[plan.tier].bg,
-          borderWidth: TIER_CHIP[plan.tier].border ? 1 : 0,
-          borderColor: TIER_CHIP[plan.tier].border,
           paddingHorizontal: 7,
           paddingVertical: 2,
-          borderRadius: 6,
+          borderRadius: 7,
         }}
       >
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 8, fontWeight: '700', letterSpacing: 0.4, color: TIER_CHIP[plan.tier].fg }}>
