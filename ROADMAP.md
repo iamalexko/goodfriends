@@ -47,7 +47,7 @@ _Engineering tasks migrated from `HANDOFF.md`. These are the concrete "finish th
 Core port is ✅ complete (Auth, Home, Plans, Crew, Profile, Create Plan, Plan Detail + Moments, Notifications). Remaining:
 - [ ] **Summary screen** — port web `Summary.jsx` (AI monthly recap). The only unported screen; needs the `generate-summary` edge fn wired + the recap UI.
 - [ ] **Deep links** — handle `goodfriends://join/...` (invite) and `goodfriends://plan/<id>` cold-start routing.
-- [ ] **Push notifications** via `expo-notifications` — the plugin + `aps-environment` entitlement were **removed** to unblock device builds on a free/personal Apple team (can't sign push entitlements). Re-add when on a paid team / EAS Build.
+- [ ] **Push notifications** — the **full pipeline is built + guarded** (`push_tokens` table, `send-push` edge fn, `notifications` AFTER-INSERT trigger, guarded mobile registration + tap-to-route); it no-ops safely with no credential. **To go live** (paid-account work): add `aps-environment` + the `expo-notifications` plugin in `app.json`, `eas init` + EAS APNs key (paid team), rebuild, test on a **real device**. See HANDOFF "Push go-live checklist".
 - [ ] **Device tap-through QA** — native photo-picker tap + in-app mutation buttons (RSVP submit, edit save, close attendance, delete, nudge, approve/reject, react) are verified at render + backend level but not via real taps (no sim tap automation). A pass on a physical device closes the loop.
 - [ ] **TestFlight distribution** via EAS Build.
 

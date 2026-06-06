@@ -2,3 +2,8 @@ project_id = "ligemjbtjpqmrrwyiiyu"
 
 [functions.send-reminders]
 schedule = "0 5 * * *"
+
+# send-push is invoked internally by the notifications AFTER INSERT trigger
+# (it uses the service-role key + verify_jwt:false). Redeploy with --no-verify-jwt.
+[functions.send-push]
+verify_jwt = false
