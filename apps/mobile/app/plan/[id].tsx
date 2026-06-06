@@ -797,7 +797,9 @@ export default function PlanDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFBF5', paddingTop: insets.top }}>
         <FloatingBack onPress={goBack} dark insets={insets} />
-        <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 14 }}>
+        {/* Clear the floating back button (top: insets.top + 6, HERO_BTN 36)
+            so the cover skeleton doesn't tuck behind it. */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 52, gap: 14 }}>
           <SkeletonBlock style={{ width: '100%', height: 200, borderRadius: 20 }} />
           <SkeletonText width="70%" height={24} />
           <SkeletonText width="45%" height={13} />
