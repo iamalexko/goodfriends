@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { SkeletonBlock, SkeletonText } from '../components/Skeleton'
+import { BreathingDot } from '../components/BrandLoader'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -829,8 +831,17 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
   }
 
   if (loading) return (
-    <div className="phone-shell flex items-center justify-center">
-      <div className="text-4xl animate-spin">⚡</div>
+    <div className="phone-shell">
+      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <SkeletonBlock height={200} radius={20} />
+        <SkeletonText width="70%" height={24} />
+        <SkeletonText width="45%" height={13} />
+        <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+          <SkeletonBlock width="100%" height={64} radius={16} />
+          <SkeletonBlock width="100%" height={64} radius={16} />
+          <SkeletonBlock width="100%" height={64} radius={16} />
+        </div>
+      </div>
     </div>
   )
 
@@ -1128,7 +1139,7 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
 
         {uploading && (
           <div className="mx-5 mb-3 rounded-[14px] bg-gray-100 aspect-square flex items-center justify-center">
-            <i className="ti ti-loader-2 animate-spin text-[#aaa] text-2xl" />
+            <BreathingDot size={9} color="#9A9A9A" />
           </div>
         )}
 
@@ -1567,10 +1578,14 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
                     padding: 0,
                   }}
                 >
-                  <i
-                    className={`ti ${uploading ? 'ti-loader-2 animate-spin' : 'ti-arrow-up'}`}
-                    style={{ fontSize: 14, color: (composerText.trim() || composerPhoto) ? '#fff' : '#aaa' }}
-                  />
+                  {uploading ? (
+                    <BreathingDot size={7} color={(composerText.trim() || composerPhoto) ? '#fff' : '#aaa'} />
+                  ) : (
+                    <i
+                      className="ti ti-arrow-up"
+                      style={{ fontSize: 14, color: (composerText.trim() || composerPhoto) ? '#fff' : '#aaa' }}
+                    />
+                  )}
                 </button>
               </div>
             </div>
@@ -1852,8 +1867,11 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
               {/* Scrollable body */}
               <div className="flex-1 overflow-y-auto px-5 pb-3">
                 {editLoading ? (
-                  <div className="flex items-center justify-center py-10">
-                    <div className="text-3xl animate-spin">⚡</div>
+                  <div className="py-2">
+                    <SkeletonText width="40%" height={11} />
+                    <SkeletonBlock height={44} radius={12} style={{ marginTop: 8, marginBottom: 18 }} />
+                    <SkeletonText width="40%" height={11} />
+                    <SkeletonBlock height={44} radius={12} style={{ marginTop: 8 }} />
                   </div>
                 ) : (
                   <>

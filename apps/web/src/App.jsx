@@ -124,31 +124,32 @@ export default function App() {
   }
 
   if (loading) {
+    // Tier 1 — launch wordmark. Each glyph fades + rises in, left-to-right
+    // (.gf-wm-letter + per-letter animation-delay), then holds. Pure ink on
+    // cream, period is the final ink glyph — no clay dot (loading is chrome).
+    const WORD = 'Goodfriends.'
     return (
       <div
         style={{
           width: '100%', minHeight: '100vh',
           background: '#FFFBF5',
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
         <div
           style={{
             fontFamily: '"Plus Jakarta Sans", sans-serif',
-            fontSize: 28, fontWeight: 800,
-            color: '#111', letterSpacing: '-0.5px',
+            fontSize: 30, fontWeight: 800,
+            color: '#111', letterSpacing: '-1px',
+            display: 'flex',
           }}
         >
-          Goodfriends.
+          {WORD.split('').map((ch, i) => (
+            <span key={i} className="gf-wm-letter" style={{ animationDelay: `${i * 38}ms` }}>
+              {ch}
+            </span>
+          ))}
         </div>
-        <div
-          style={{
-            width: 6, height: 6, borderRadius: '50%',
-            background: '#FB923C',
-            animation: 'pulse 1.2s ease-in-out infinite',
-          }}
-        />
       </div>
     )
   }

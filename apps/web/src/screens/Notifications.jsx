@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SkeletonRow } from '../components/Skeleton'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -93,8 +94,8 @@ export default function Notifications({ navigate }) {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0 40px', position: 'relative', zIndex: 1 }}>
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
-            <div style={{ fontSize: 28 }} className="animate-spin">⚡</div>
+          <div style={{ padding: '8px 20px' }}>
+            <SkeletonRow /><SkeletonRow /><SkeletonRow /><SkeletonRow /><SkeletonRow />
           </div>
         ) : notifications.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 24px' }}>
