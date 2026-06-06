@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SkeletonBlock, SkeletonText } from '../components/Skeleton'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -56,7 +57,11 @@ export default function JoinPage({ code }) {
   if (previewLoading || authLoading) {
     return (
       <div className="phone-shell flex items-center justify-center">
-        <div className="text-4xl animate-spin">⚡</div>
+        <div style={{ width: '100%', maxWidth: 360, padding: '0 20px' }}>
+          <SkeletonBlock height={160} radius={20} />
+          <SkeletonText width="60%" height={20} style={{ marginTop: 16 }} />
+          <SkeletonText width="40%" height={13} style={{ marginTop: 10 }} />
+        </div>
       </div>
     )
   }

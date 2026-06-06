@@ -117,3 +117,42 @@ html, body {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.7); }
 }
+
+/* ---- Three-tier loading system (mirrors apps/mobile) ----
+   Loading is chrome -> ink-on-cream, never clay. */
+
+/* Tier 1 — launch wordmark: each letter fades + rises in, left-to-right, then
+   holds (forwards). Per-letter delay is set inline (animation-delay). */
+@keyframes wordmarkIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.gf-wm-letter {
+  display: inline-block;
+  opacity: 0;
+  animation: wordmarkIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Tier 2 — skeleton fill: breathes between the cream-family base (#F3EFE7)
+   and a slightly darker shimmer (#E9E2D6). Warm, never cold grey. */
+@keyframes skeletonBreathe {
+  0%, 100% { background-color: #F3EFE7; }
+  50%      { background-color: #E9E2D6; }
+}
+.gf-skeleton {
+  background-color: #F3EFE7;
+  border-radius: 8px;
+  animation: skeletonBreathe 1.4s ease-in-out infinite;
+}
+
+/* Tier 3 — smile-draw: the cream negative-space smile draws in and out. */
+@keyframes smileDraw {
+  0%   { stroke-dashoffset: 360; }
+  50%  { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 360; }
+}
+.gf-smile { stroke-dasharray: 360; animation: smileDraw 2s ease-in-out infinite; }
+
+/* Button busy — a small breathing ink dot (not a spinner). */
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.gf-breathe { animation: breathe 1.2s ease-in-out infinite; }

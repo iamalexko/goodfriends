@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -16,7 +16,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { EmojiAvatar } from '../../components/EmojiAvatar'
 import { Pill } from '../../components/Pill'
-import { Loader } from '../../components/Loader'
+import { SkeletonBlock, SkeletonText } from '../../components/Skeleton'
+import { BreathingDot } from '../../components/BrandLoader'
 import { EmojiBurst } from '../../components/EmojiBurst'
 import { GlassSurface, GlassPanel } from '../../components/GlassSurface'
 import { CenterDialog } from '../../components/CenterDialog'
@@ -796,7 +797,60 @@ export default function PlanDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFBF5', paddingTop: insets.top }}>
         <FloatingBack onPress={goBack} dark insets={insets} />
-        <Loader />
+        {/* Mirrors the real layout: cover, When/Where cards, RSVP tiles,
+            Who's coming faces, Moments feed. paddingTop clears the floating
+            back button (top: insets.top + 6, HERO_BTN 36). */}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 52, paddingBottom: 40, gap: 16 }}>
+          {/* Cover hero */}
+          <SkeletonBlock style={{ width: '100%', height: 200, borderRadius: 20 }} />
+
+          {/* When / Where cards */}
+          <View style={{ gap: 9 }}>
+            {[0, 1].map((i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 11 }}>
+                <SkeletonBlock style={{ width: 38, height: 38, borderRadius: 11 }} />
+                <View style={{ flex: 1, gap: 7 }}>
+                  <SkeletonBlock style={{ width: 44, height: 8, borderRadius: 4 }} />
+                  <SkeletonText width={i === 0 ? '58%' : '72%'} height={13} />
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Your RSVP */}
+          <View>
+            <SkeletonBlock style={{ width: 72, height: 9, borderRadius: 4, marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 14 }} />
+              <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 14 }} />
+              <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 14 }} />
+            </View>
+          </View>
+
+          {/* Who's coming — overlapping faces */}
+          <View>
+            <SkeletonBlock style={{ width: 96, height: 9, borderRadius: 4, marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row' }}>
+              {[0, 1, 2, 3].map((i) => (
+                <SkeletonBlock key={i} style={{ width: 30, height: 30, borderRadius: 15, marginLeft: i === 0 ? 0 : -8, borderWidth: 2, borderColor: '#FFFBF5' }} />
+              ))}
+            </View>
+          </View>
+
+          {/* Moments — photo + comment feed */}
+          <View>
+            <SkeletonBlock style={{ width: 80, height: 9, borderRadius: 4, marginBottom: 12 }} />
+            {[0, 1].map((i) => (
+              <View key={i} style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                <SkeletonBlock style={{ width: 32, height: 32, borderRadius: 16 }} />
+                <View style={{ flex: 1, gap: 7, paddingTop: 2 }}>
+                  <SkeletonText width="38%" height={10} />
+                  <SkeletonText width={i === 0 ? '88%' : '64%'} height={11} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       </View>
     )
   }
@@ -1070,7 +1124,7 @@ export default function PlanDetail() {
             {/* Uploading skeleton */}
             {uploading && composerPhoto && (
               <View style={{ marginTop: 14, height: 180, borderRadius: 14, backgroundColor: '#F1F1F1', alignItems: 'center', justifyContent: 'center' }}>
-                <ActivityIndicator color="#AAAAAA" />
+                <BreathingDot size={9} color="#9A9A9A" />
               </View>
             )}
 
@@ -1255,7 +1309,7 @@ export default function PlanDetail() {
               </Pressable>
             )}
             <Pressable onPress={submitPost} disabled={uploading || (!composerText.trim() && !composerPhoto)} style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: composerText.trim() || composerPhoto ? '#111111' : '#E5E7EB' }}>
-              {uploading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <PaperPlaneTilt size={16} weight="fill" color={composerText.trim() || composerPhoto ? '#FFFFFF' : '#AAAAAA'} />}
+              {uploading ? <BreathingDot size={7} color="#FFFFFF" /> : <PaperPlaneTilt size={16} weight="fill" color={composerText.trim() || composerPhoto ? '#FFFFFF' : '#AAAAAA'} />}
             </Pressable>
           </View>
         </View>
@@ -1537,7 +1591,7 @@ export default function PlanDetail() {
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 14 }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111' }}>Change cover</Text>
-              {coverBusy && <ActivityIndicator color="#E2683F" />}
+              {coverBusy && <BreathingDot size={8} color="#111111" />}
             </View>
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
               <Text style={FIELD_LABEL}>Upload or pick a colour</Text>

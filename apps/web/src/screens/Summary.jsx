@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { SkeletonText, SkeletonRow } from '../components/Skeleton'
+import { BrandLoader, BreathingDot } from '../components/BrandLoader'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { NavBar, TopBar, BackButton } from '../components/UI'
@@ -123,7 +125,16 @@ export default function Summary({ navigate }) {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20"><div className="text-4xl animate-spin">⚡</div></div>
+          <div className="px-5">
+            <SkeletonText width="80%" height={28} />
+            <SkeletonText width="60%" height={14} style={{ marginTop: 12 }} />
+            <div style={{ marginTop: 24 }}><SkeletonRow /><SkeletonRow /><SkeletonRow /></div>
+          </div>
+        ) : generating && !hasSummary ? (
+          // Tier 3 — the AI recap is THE brand moment: smile-draw, not a skeleton.
+          <div className="flex items-center justify-center py-24">
+            <BrandLoader label="Writing your recap…" />
+          </div>
         ) : (
           <>
             {/* Headline + subtitle. AI-generated when available; otherwise a
@@ -211,7 +222,7 @@ export default function Summary({ navigate }) {
                 disabled={generating || planCount === 0}
                 className="w-full py-4 bg-ink text-white rounded-full font-display font-black text-base flex items-center justify-center gap-2 mb-2.5 disabled:opacity-50"
               >
-                <i className={`ti ${generating ? 'ti-loader-2 animate-spin' : (hasSummary ? 'ti-refresh' : 'ti-sparkles')} text-lg`} />
+                {generating ? <BreathingDot /> : <i className={`ti ${hasSummary ? 'ti-refresh' : 'ti-sparkles'} text-lg`} />}
                 {generating
                   ? 'Writing…'
                   : hasSummary

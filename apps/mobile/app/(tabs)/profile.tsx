@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext'
 import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
 import { Pill } from '../../components/Pill'
 import { StatCell } from '../../components/StatCell'
-import { Loader } from '../../components/Loader'
+import { SkeletonRow } from '../../components/Skeleton'
 import { EmojiPicker } from '../../components/EmojiPicker'
 
 type Scores = {
@@ -292,7 +292,11 @@ export default function Profile() {
         </View>
 
         {loading ? (
-          <Loader size="sm" />
+          <View style={{ gap: 4 }}>
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </View>
         ) : history.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 20 }}>
             <Text style={{ fontSize: 28, marginBottom: 6 }}>🎯</Text>

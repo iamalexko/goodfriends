@@ -19,7 +19,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
 import { PlanCard, Plan } from '../../components/PlanCard'
-import { Loader } from '../../components/Loader'
+import { SkeletonCard, SkeletonText } from '../../components/Skeleton'
 
 // Local YYYY-MM-DD — never via toISOString(), which is UTC and would mislabel
 // Today/Tomorrow near midnight in Dubai (UTC+4).
@@ -221,7 +221,13 @@ export default function Home() {
     <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
       {loading ? (
         <View style={{ flex: 1, paddingTop: headerPadTop }}>
-          <Loader />
+          <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 14, gap: 8 }}>
+            <SkeletonText width={150} height={20} />
+            <SkeletonText width={120} height={11} />
+          </View>
+          <SkeletonText width={88} height={10} style={{ marginLeft: 20, marginBottom: 12 }} />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       ) : (
         <Animated.ScrollView

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { SkeletonBlock, SkeletonText } from '../components/Skeleton'
+import { BreathingDot } from '../components/BrandLoader'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -829,8 +831,59 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
   }
 
   if (loading) return (
-    <div className="phone-shell flex items-center justify-center">
-      <div className="text-4xl animate-spin">⚡</div>
+    <div className="phone-shell">
+      {/* Mirrors the real layout: cover, When/Where cards, RSVP tiles,
+          Who's coming faces, Moments feed. */}
+      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <SkeletonBlock height={200} radius={20} />
+
+        {/* When / Where cards */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+          {[0, 1].map((i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 11, background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 14, padding: '11px 12px' }}>
+              <SkeletonBlock width={38} height={38} radius={11} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <SkeletonBlock width={44} height={8} radius={4} />
+                <SkeletonText width={i === 0 ? '58%' : '72%'} height={13} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Your RSVP */}
+        <div>
+          <SkeletonBlock width={72} height={9} radius={4} style={{ marginBottom: 12 }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <SkeletonBlock width="100%" height={64} radius={14} />
+            <SkeletonBlock width="100%" height={64} radius={14} />
+            <SkeletonBlock width="100%" height={64} radius={14} />
+          </div>
+        </div>
+
+        {/* Who's coming — overlapping faces */}
+        <div>
+          <SkeletonBlock width={96} height={9} radius={4} style={{ marginBottom: 12 }} />
+          <div style={{ display: 'flex' }}>
+            {[0, 1, 2, 3].map((i) => (
+              <SkeletonBlock key={i} width={30} height={30} radius={15} style={{ marginLeft: i === 0 ? 0 : -8, border: '2px solid #FFFBF5' }} />
+            ))}
+          </div>
+        </div>
+
+        {/* Moments — photo + comment feed */}
+        <div>
+          <SkeletonBlock width={80} height={9} radius={4} style={{ marginBottom: 12 }} />
+          {[0, 1].map((i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+              <SkeletonBlock width={32} height={32} radius={16} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7, paddingTop: 2 }}>
+                <SkeletonText width="38%" height={10} />
+                <SkeletonText width={i === 0 ? '88%' : '64%'} height={11} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 
@@ -1128,7 +1181,7 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
 
         {uploading && (
           <div className="mx-5 mb-3 rounded-[14px] bg-gray-100 aspect-square flex items-center justify-center">
-            <i className="ti ti-loader-2 animate-spin text-[#aaa] text-2xl" />
+            <BreathingDot size={9} color="#9A9A9A" />
           </div>
         )}
 
@@ -1567,10 +1620,14 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
                     padding: 0,
                   }}
                 >
-                  <i
-                    className={`ti ${uploading ? 'ti-loader-2 animate-spin' : 'ti-arrow-up'}`}
-                    style={{ fontSize: 14, color: (composerText.trim() || composerPhoto) ? '#fff' : '#aaa' }}
-                  />
+                  {uploading ? (
+                    <BreathingDot size={7} color={(composerText.trim() || composerPhoto) ? '#fff' : '#aaa'} />
+                  ) : (
+                    <i
+                      className="ti ti-arrow-up"
+                      style={{ fontSize: 14, color: (composerText.trim() || composerPhoto) ? '#fff' : '#aaa' }}
+                    />
+                  )}
                 </button>
               </div>
             </div>
@@ -1852,8 +1909,11 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
               {/* Scrollable body */}
               <div className="flex-1 overflow-y-auto px-5 pb-3">
                 {editLoading ? (
-                  <div className="flex items-center justify-center py-10">
-                    <div className="text-3xl animate-spin">⚡</div>
+                  <div className="py-2">
+                    <SkeletonText width="40%" height={11} />
+                    <SkeletonBlock height={44} radius={12} style={{ marginTop: 8, marginBottom: 18 }} />
+                    <SkeletonText width="40%" height={11} />
+                    <SkeletonBlock height={44} radius={12} style={{ marginTop: 8 }} />
                   </div>
                 ) : (
                   <>

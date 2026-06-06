@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SkeletonRow } from '../components/Skeleton'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -124,7 +125,9 @@ export default function Profile({ navigate }) {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-6"><div className="text-2xl animate-spin">⚡</div></div>
+          <div className="px-5">
+            <SkeletonRow /><SkeletonRow /><SkeletonRow />
+          </div>
         ) : history.length === 0 ? (
           <div className="px-5 py-6 text-center">
             <div className="text-3xl mb-2">🎯</div>

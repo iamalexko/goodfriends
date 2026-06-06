@@ -11,7 +11,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
 import { StatCell } from '../../components/StatCell'
-import { Loader } from '../../components/Loader'
+import { SkeletonStat, SkeletonRow } from '../../components/Skeleton'
 
 // Position-based bar colours: rank determines colour, not identity.
 const MEMBER_COLORS = ['#FB923C', '#818CF8', '#34D399', '#F472B6', '#60A5FA']
@@ -144,7 +144,17 @@ export default function Crew() {
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
       {loading ? (
-        <View style={{ flex: 1, paddingTop: headerPadTop }}><Loader /></View>
+        <View style={{ flex: 1, paddingTop: headerPadTop, paddingHorizontal: 20 }}>
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 22 }}>
+            <SkeletonStat />
+            <SkeletonStat />
+            <SkeletonStat />
+          </View>
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+        </View>
       ) : (
         <Animated.ScrollView
           onScroll={onScroll}

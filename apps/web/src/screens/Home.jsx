@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { SkeletonCard } from '../components/Skeleton'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -315,8 +316,10 @@ export default function Home({ navigate }) {
 
       <div className="scroll-area relative z-10">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-3xl animate-spin">⚡</div>
+          <div style={{ padding: '0 20px' }}>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
           </div>
         ) : (
           <>

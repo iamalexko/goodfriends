@@ -12,7 +12,7 @@ import Animated, {
 import { supabase } from '../../lib/supabase'
 import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
 import { Plan } from '../../components/PlanCard'
-import { Loader } from '../../components/Loader'
+import { SkeletonCard } from '../../components/Skeleton'
 
 type Tab = 'upcoming' | 'past'
 
@@ -243,7 +243,9 @@ export default function Plans() {
     <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
       {loading ? (
         <View style={{ flex: 1, paddingTop: headerPadTop }}>
-          <Loader />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       ) : (
         <View style={{ flex: 1 }}>
