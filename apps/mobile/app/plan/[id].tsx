@@ -797,18 +797,60 @@ export default function PlanDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFBF5', paddingTop: insets.top }}>
         <FloatingBack onPress={goBack} dark insets={insets} />
-        {/* Clear the floating back button (top: insets.top + 6, HERO_BTN 36)
-            so the cover skeleton doesn't tuck behind it. */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 52, gap: 14 }}>
+        {/* Mirrors the real layout: cover, When/Where cards, RSVP tiles,
+            Who's coming faces, Moments feed. paddingTop clears the floating
+            back button (top: insets.top + 6, HERO_BTN 36). */}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 52, paddingBottom: 40, gap: 16 }}>
+          {/* Cover hero */}
           <SkeletonBlock style={{ width: '100%', height: 200, borderRadius: 20 }} />
-          <SkeletonText width="70%" height={24} />
-          <SkeletonText width="45%" height={13} />
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-            <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 16 }} />
-            <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 16 }} />
-            <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 16 }} />
+
+          {/* When / Where cards */}
+          <View style={{ gap: 9 }}>
+            {[0, 1].map((i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 11 }}>
+                <SkeletonBlock style={{ width: 38, height: 38, borderRadius: 11 }} />
+                <View style={{ flex: 1, gap: 7 }}>
+                  <SkeletonBlock style={{ width: 44, height: 8, borderRadius: 4 }} />
+                  <SkeletonText width={i === 0 ? '58%' : '72%'} height={13} />
+                </View>
+              </View>
+            ))}
           </View>
-        </View>
+
+          {/* Your RSVP */}
+          <View>
+            <SkeletonBlock style={{ width: 72, height: 9, borderRadius: 4, marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 14 }} />
+              <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 14 }} />
+              <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 14 }} />
+            </View>
+          </View>
+
+          {/* Who's coming — overlapping faces */}
+          <View>
+            <SkeletonBlock style={{ width: 96, height: 9, borderRadius: 4, marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row' }}>
+              {[0, 1, 2, 3].map((i) => (
+                <SkeletonBlock key={i} style={{ width: 30, height: 30, borderRadius: 15, marginLeft: i === 0 ? 0 : -8, borderWidth: 2, borderColor: '#FFFBF5' }} />
+              ))}
+            </View>
+          </View>
+
+          {/* Moments — photo + comment feed */}
+          <View>
+            <SkeletonBlock style={{ width: 80, height: 9, borderRadius: 4, marginBottom: 12 }} />
+            {[0, 1].map((i) => (
+              <View key={i} style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                <SkeletonBlock style={{ width: 32, height: 32, borderRadius: 16 }} />
+                <View style={{ flex: 1, gap: 7, paddingTop: 2 }}>
+                  <SkeletonText width="38%" height={10} />
+                  <SkeletonText width={i === 0 ? '88%' : '64%'} height={11} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       </View>
     )
   }
