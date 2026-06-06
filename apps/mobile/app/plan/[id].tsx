@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { CalendarBlank, Clock, MapPin, PencilSimple, Check, Camera, PaperPlaneTilt, X, DotsThree, Trash, CaretLeft, ArrowSquareOut, Smiley, CornersOut } from 'phosphor-react-native'
+import { CalendarBlank, Clock, MapPin, PencilSimple, Check, Camera, PaperPlaneTilt, X, DotsThree, Trash, CaretLeft, ArrowSquareOut, Smiley, CornersOut, Export } from 'phosphor-react-native'
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -38,6 +38,11 @@ const RSVP_PILL: Record<string, 'mint' | 'yellow' | 'neutral'> = { in: 'mint', l
 
 // Quick-react palette — mirrors the web Moments feed.
 const REACTION_OPTIONS = ['😂', '😍', '🔥', '👏', '😭', '🫶', '❓']
+
+// Web base for shareable event links — the web app resolves /event/:id as a
+// member-only preview (it never adds or RSVPs anyone). Centralised here so a custom
+// domain is a one-line swap; override at build time via EXPO_PUBLIC_WEB_URL.
+const WEB_BASE = process.env.EXPO_PUBLIC_WEB_URL || 'https://goodfriends-git-main-alex-ko-projects.vercel.app'
 
 function formatPlanDate(dateStr?: string | null) {
   if (!dateStr) return ''
@@ -711,6 +716,28 @@ export default function PlanDetail() {
     Linking.openURL(url).catch(() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`))
   }
 
+  // ---- Share (Stage 1: compose ONLY — never mutates. The recipient opens the
+  //      web /event/:id, which is RLS member-gated; non-members hit "request
+  //      invite" there. Mobile deep-link receiving is a separate later task.) ----
+  function getEventShareUrl() {
+    return `${WEB_BASE}/event/${id}`
+  }
+  function getEventShareText() {
+    const when = [formatPlanDate(plan?.date), formatTime12(plan?.time)].filter(Boolean).join(' · ')
+    const where = plan?.location ? ` at ${plan.location}` : ''
+    const line = `${plan?.name || 'Plan'}${when ? ` is on ${when}` : ''}${where}`
+    return [line, 'Open it in Goodfriends:', getEventShareUrl()].join('\n')
+  }
+  async function shareEvent() {
+    // Native iOS share sheet — already includes WhatsApp / Messages / Copy / etc.
+    // Pass MESSAGE-ONLY (the URL is the last line of the text) so targets like
+    // WhatsApp keep the text + link together instead of stripping to a bare URL.
+    // A user dismissing the sheet resolves normally (not an error) — ignore throws.
+    try {
+      await Share.share({ message: getEventShareText() })
+    } catch {}
+  }
+
   // ---- Plan-level hype reaction (one per user; tapping a new emoji replaces) ----
   async function setPlanReaction(emoji: string) {
     if (!user || !plan) return
@@ -1236,13 +1263,23 @@ export default function PlanDetail() {
 
       {/* ===== Floating controls (over the scroll) ===== */}
       <FloatingBack onPress={goBack} insets={insets} iconColor={heroTone.iconColor} scrim={heroTone.scrim} />
-      {isOrganiser && (
-        <Pressable onPress={() => setOrganiserMenuOpen(true)} hitSlop={8} style={{ position: 'absolute', top: insets.top + 6, right: 14, zIndex: 50 }}>
-          <HeroGlassCircle scrim={heroTone.scrim}>
-            <DotsThree size={20} weight="bold" color={heroTone.iconColor} />
-          </HeroGlassCircle>
-        </Pressable>
-      )}
+      {/* Top-right cluster: Share (everyone) + organiser ⋯ menu. */}
+      <View style={{ position: 'absolute', top: insets.top + 6, right: 14, flexDirection: 'row', gap: 8, zIndex: 50 }}>
+        {canViewMoments && (
+          <Pressable onPress={shareEvent} hitSlop={8} accessibilityLabel="Share event">
+            <HeroGlassCircle scrim={heroTone.scrim}>
+              <Export size={18} weight="bold" color={heroTone.iconColor} />
+            </HeroGlassCircle>
+          </Pressable>
+        )}
+        {isOrganiser && (
+          <Pressable onPress={() => setOrganiserMenuOpen(true)} hitSlop={8} accessibilityLabel="Event options">
+            <HeroGlassCircle scrim={heroTone.scrim}>
+              <DotsThree size={20} weight="bold" color={heroTone.iconColor} />
+            </HeroGlassCircle>
+          </Pressable>
+        )}
+      </View>
 
       {/* ---- Edit modal ---- */}
       <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => !savingEdit && setEditOpen(false)}>
