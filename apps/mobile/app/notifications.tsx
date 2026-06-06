@@ -22,7 +22,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { BackButton } from '../components/BackButton'
-import { Loader } from '../components/Loader'
+import { SkeletonRow } from '../components/Skeleton'
 
 // Map notification.type → an icon component + chip colors. Mirrors the web
 // TYPE_ICON table (Tabler → Phosphor). Falls back to a generic bell.
@@ -122,7 +122,13 @@ export default function Notifications() {
       </View>
 
       {loading ? (
-        <Loader />
+        <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+        </View>
       ) : items.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, paddingBottom: 80 }}>
           <Text style={{ fontSize: 40, marginBottom: 12 }}>🔔</Text>

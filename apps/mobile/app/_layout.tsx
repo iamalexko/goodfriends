@@ -1,6 +1,6 @@
 import '../global.css'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -24,6 +24,7 @@ import {
 
 import { AuthProvider, useAuth } from '../context/AuthContext'
 import { registerPushToken, addPushResponseListener } from '../lib/push'
+import { LaunchWordmark } from '../components/LaunchWordmark'
 
 // Keep the splash up until fonts resolve so the wordmark doesn't flash in
 // the system fallback face on first paint. If the font fetch errors out
@@ -55,6 +56,7 @@ function PushBridge() {
 }
 
 export default function RootLayout() {
+  const [launchDone, setLaunchDone] = useState(false)
   const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
@@ -86,6 +88,9 @@ export default function RootLayout() {
           />
         </Stack>
       </AuthProvider>
+
+      {/* Tier 1 — launch wordmark overlay; plays once, then reveals the app. */}
+      {!launchDone && <LaunchWordmark onDone={() => setLaunchDone(true)} />}
     </GestureHandlerRootView>
   )
 }

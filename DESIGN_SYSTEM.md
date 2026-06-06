@@ -90,7 +90,20 @@ Status is communicated by **ink weight, position, and small text first** — col
 
 ---
 
-## 5. Notes for implementation
+## 5. Loading states (three-tier)
+
+**Loading is chrome, so loading is ink-on-cream — never clay.** Clay is the rare signature accent; spending it on spinners cheapens it. The whole system is `#111` on `#FFFBF5` plus a warm-grey skeleton family. Match the tier to the wait:
+
+- **Tier 1 — App launch: the animated wordmark.** On cold start the **"Goodfriends."** wordmark assembles itself — each glyph fades + rises in, left-to-right (~38ms stagger, ~320ms per letter), holds briefly, then the cream overlay fades to reveal the app. Pure ink, Plus Jakarta Sans 800, tight tracking. The period is just the final ink character (no clay dot). Plays **once**, never loops. Component: `components/LaunchWordmark.tsx`, mounted at the root `_layout`. The **native splash is plain cream** (no image) so the JS stagger is the _first_ wordmark the user sees — a baked mark would re-stagger and flicker. (Splash change bakes in on the next prebuild/EAS build.)
+- **Tier 2 — Routine loads: warm-grey skeletons.** Every full-screen fetch (Home, Plans, Crew, PlanDetail, Notifications) shows a skeleton that **mirrors that screen's real layout** so content fills in instead of popping onto a blank page. Fill breathes between the cream-family base `#F3EFE7` and a slightly darker shimmer `#E9E2D6` — **warm, never cold grey**. Primitives in `components/Skeleton.tsx`: `SkeletonBlock` (animated base), `SkeletonText`, `SkeletonStat`, `SkeletonRow`, `SkeletonCard` (mirrors PlanCard). Compose per screen; don't reach for a spinner.
+- **Tier 3 — Special moments only: the smile-draw `BrandLoader`.** An ink dot with the cream negative-space smile drawing in and out, looping (`components/BrandLoader.tsx`). **Reserved** for deliberate brand moments (e.g. AI summary generation) — keep it rare so it stays meaningful. Never use it for routine fetches; those are Tier 2.
+- **Button busy state — a breathing ink dot.** A small pulsing dot (`BreathingDot` from `BrandLoader.tsx`), **not** a spinner and **not** the smile-draw. Pair it with the existing busy text ("Saving…", "Closing…"). On a dark button the dot is white; on cream/grey it's ink.
+
+**Retired:** the orange-dot `Loader`, the `⚡` emoji spinner, and the `ti-loader-2` spinner are gone — don't reintroduce them. No `ActivityIndicator` in app code; use `BreathingDot`.
+
+---
+
+## 6. Notes for implementation
 
 - The ink/cream retokening is **mostly removing color, not swapping it** — simpler than a full palette swap. Replace `#FB923C`/peach usages with ink or (rarely) clay; demote bright mint/violet semantics to quiet/weight-based status.
 - **Centralize tokens first.** Any hardcoded `#FB923C` (etc.) should move into `tailwind.config.js` + shared style constants before retokening, so future palette changes are one-line.

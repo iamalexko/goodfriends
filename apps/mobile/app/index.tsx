@@ -1,6 +1,6 @@
 import { Redirect } from 'expo-router'
 
-import { Loader } from '../components/Loader'
+import { View } from 'react-native'
 import { useAuth } from '../context/AuthContext'
 
 // Boot router: park on the branded loader until AuthContext resolves, then
@@ -11,7 +11,9 @@ export default function Index() {
   const { user, profile, loading } = useAuth()
 
   if (loading) {
-    return <Loader fullScreen size="lg" />
+    // Plain cream — the launch wordmark overlay (root _layout) covers this on
+    // cold start; for warm navigations the redirect is instant.
+    return <View style={{ flex: 1, backgroundColor: '#FFFBF5' }} />
   }
 
   if (!user || !profile?.display_name) {

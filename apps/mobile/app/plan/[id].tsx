@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -16,7 +16,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { EmojiAvatar } from '../../components/EmojiAvatar'
 import { Pill } from '../../components/Pill'
-import { Loader } from '../../components/Loader'
+import { SkeletonBlock, SkeletonText } from '../../components/Skeleton'
+import { BreathingDot } from '../../components/BrandLoader'
 import { EmojiBurst } from '../../components/EmojiBurst'
 import { GlassSurface, GlassPanel } from '../../components/GlassSurface'
 import { CenterDialog } from '../../components/CenterDialog'
@@ -796,7 +797,16 @@ export default function PlanDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFBF5', paddingTop: insets.top }}>
         <FloatingBack onPress={goBack} dark insets={insets} />
-        <Loader />
+        <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 14 }}>
+          <SkeletonBlock style={{ width: '100%', height: 200, borderRadius: 20 }} />
+          <SkeletonText width="70%" height={24} />
+          <SkeletonText width="45%" height={13} />
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
+            <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 16 }} />
+            <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 16 }} />
+            <SkeletonBlock style={{ flex: 1, height: 64, borderRadius: 16 }} />
+          </View>
+        </View>
       </View>
     )
   }
@@ -1070,7 +1080,7 @@ export default function PlanDetail() {
             {/* Uploading skeleton */}
             {uploading && composerPhoto && (
               <View style={{ marginTop: 14, height: 180, borderRadius: 14, backgroundColor: '#F1F1F1', alignItems: 'center', justifyContent: 'center' }}>
-                <ActivityIndicator color="#AAAAAA" />
+                <BreathingDot size={9} color="#9A9A9A" />
               </View>
             )}
 
@@ -1255,7 +1265,7 @@ export default function PlanDetail() {
               </Pressable>
             )}
             <Pressable onPress={submitPost} disabled={uploading || (!composerText.trim() && !composerPhoto)} style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: composerText.trim() || composerPhoto ? '#111111' : '#E5E7EB' }}>
-              {uploading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <PaperPlaneTilt size={16} weight="fill" color={composerText.trim() || composerPhoto ? '#FFFFFF' : '#AAAAAA'} />}
+              {uploading ? <BreathingDot size={7} color="#FFFFFF" /> : <PaperPlaneTilt size={16} weight="fill" color={composerText.trim() || composerPhoto ? '#FFFFFF' : '#AAAAAA'} />}
             </Pressable>
           </View>
         </View>
@@ -1537,7 +1547,7 @@ export default function PlanDetail() {
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'center', marginBottom: 14 }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, fontWeight: '800', color: '#111111' }}>Change cover</Text>
-              {coverBusy && <ActivityIndicator color="#E2683F" />}
+              {coverBusy && <BreathingDot size={8} color="#111111" />}
             </View>
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
               <Text style={FIELD_LABEL}>Upload or pick a colour</Text>
