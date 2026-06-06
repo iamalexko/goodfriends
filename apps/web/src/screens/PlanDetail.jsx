@@ -832,14 +832,56 @@ export default function PlanDetail({ navigate, planId, fromShareLink = false }) 
 
   if (loading) return (
     <div className="phone-shell">
-      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Mirrors the real layout: cover, When/Where cards, RSVP tiles,
+          Who's coming faces, Moments feed. */}
+      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <SkeletonBlock height={200} radius={20} />
-        <SkeletonText width="70%" height={24} />
-        <SkeletonText width="45%" height={13} />
-        <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-          <SkeletonBlock width="100%" height={64} radius={16} />
-          <SkeletonBlock width="100%" height={64} radius={16} />
-          <SkeletonBlock width="100%" height={64} radius={16} />
+
+        {/* When / Where cards */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+          {[0, 1].map((i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 11, background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 14, padding: '11px 12px' }}>
+              <SkeletonBlock width={38} height={38} radius={11} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <SkeletonBlock width={44} height={8} radius={4} />
+                <SkeletonText width={i === 0 ? '58%' : '72%'} height={13} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Your RSVP */}
+        <div>
+          <SkeletonBlock width={72} height={9} radius={4} style={{ marginBottom: 12 }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <SkeletonBlock width="100%" height={64} radius={14} />
+            <SkeletonBlock width="100%" height={64} radius={14} />
+            <SkeletonBlock width="100%" height={64} radius={14} />
+          </div>
+        </div>
+
+        {/* Who's coming — overlapping faces */}
+        <div>
+          <SkeletonBlock width={96} height={9} radius={4} style={{ marginBottom: 12 }} />
+          <div style={{ display: 'flex' }}>
+            {[0, 1, 2, 3].map((i) => (
+              <SkeletonBlock key={i} width={30} height={30} radius={15} style={{ marginLeft: i === 0 ? 0 : -8, border: '2px solid #FFFBF5' }} />
+            ))}
+          </div>
+        </div>
+
+        {/* Moments — photo + comment feed */}
+        <div>
+          <SkeletonBlock width={80} height={9} radius={4} style={{ marginBottom: 12 }} />
+          {[0, 1].map((i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+              <SkeletonBlock width={32} height={32} radius={16} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7, paddingTop: 2 }}>
+                <SkeletonText width="38%" height={10} />
+                <SkeletonText width={i === 0 ? '88%' : '64%'} height={11} />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
