@@ -38,6 +38,9 @@
       [
         "expo-splash-screen",
         {
+          "image": "./assets/splash_wordmark.png",
+          "imageWidth": 190,
+          "resizeMode": "contain",
           "backgroundColor": "#FFFBF5"
         }
       ]
