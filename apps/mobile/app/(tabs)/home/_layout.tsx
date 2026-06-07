@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router'
 
-import { HomeWordmark, HomeHeaderActions } from '../../../components/HomeStackHeader'
+import { HomeHeaderRow } from '../../../components/HomeStackHeader'
 
 // One-screen spike: give Home a NATIVE Stack header so it rides the iOS 26
 // Liquid Glass nav bar (vs. the custom AppHeader the other tabs still use).
@@ -21,14 +21,14 @@ export default function HomeStackLayout() {
     <Stack
       screenOptions={{
         headerShown: true,
-        headerTransparent: true,
-        // Empty string (not a () => null component) — native-stack falls back to
-        // the route name ("index") when headerTitle renders nothing. Branding
-        // lives in headerLeft.
-        headerTitle: '',
-        headerBackButtonDisplayMode: 'minimal',
-        headerLeft: () => <HomeWordmark />,
-        headerRight: () => <HomeHeaderActions />,
+        // Render the whole header row as the TITLE element rather than
+        // headerLeft/headerRight: iOS 26 capsule-wraps left/right bar-button
+        // items (no opt-out in react-native-screens 4.16), but the title view is
+        // not wrapped — so the wordmark stays bare and "+ Plan"/bell are distinct
+        // buttons over the native glass bar. Not headerTransparent: we keep the
+        // system glass bar background; content lays out below it.
+        headerTitleAlign: 'center',
+        headerTitle: () => <HomeHeaderRow />,
       }}
     >
       <Stack.Screen name="index" />
