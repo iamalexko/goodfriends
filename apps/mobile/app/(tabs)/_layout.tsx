@@ -30,7 +30,7 @@ export default function TabLayout() {
         colors: { ...base.colors, background: '#FFFBF5' },
       }}
     >
-      <NativeTabs tintColor="#111111" minimizeBehavior="onScrollDown">
+      <NativeTabs tintColor="#111111" minimizeBehavior="never">
         <NativeTabs.Trigger name="home">
           <Icon sf={{ default: 'house', selected: 'house.fill' }} />
           <Label>Home</Label>
