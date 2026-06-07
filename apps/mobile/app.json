@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.goodfriends.app",
+      "bundleIdentifier": "com.goodfriends.crew",
       "buildNumber": "1",
       "config": {
         "usesNonExemptEncryption": false
@@ -20,7 +20,7 @@
       }
     },
     "android": {
-      "package": "com.goodfriends.app",
+      "package": "com.goodfriends.crew",
       "adaptiveIcon": {
         "backgroundColor": "#FFFBF5",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -49,6 +49,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f013d069-172f-4703-bc4e-2c05cbf9fd87"
+      }
     }
   }
 }
