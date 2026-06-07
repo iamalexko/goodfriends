@@ -220,22 +220,18 @@ router.replace('/auth' as any)
   - PlanDetail: setRsvpStatus → rsvp (+ filling on web), deletePlan → cancelled, closeEvent → closed, submitPost → comment/photo, toggleReaction → reaction, nudgeMember → invite (poke), requestInvite → invite_request, decideInviteRequest → request_approved/rejected
   - `send-reminders` edge fn → reminder + no-reply (daily 5 UTC via pg_cron)
 
-### Push notifications (built + GUARDED — credential pending)
+### Push notifications (LIVE 🔔 — since build 5, 2026-06-07)
 
 **Architecture:** in-app `notifications` rows are the source of truth. An **AFTER INSERT trigger** on `notifications` (`trg_notifications_push` → `fire_push_on_notification()`) fires a push for every new row via **async `pg_net` `net.http_post`** → the **`send-push`** edge function → Expo's push API. So every `create_notification` call across **web + mobile** sends push with **zero call-site changes**, and in-app + push never drift. `send-reminders` is unchanged (it just inserts rows; the trigger does the rest).
 
 - **`push_tokens`** table — `id, user_id` (FK `profiles`, cascade)`, token, platform, created_at, updated_at, UNIQUE(user_id, token)`. RLS: own-rows-only (`auth.uid() = user_id`) for select/insert/update/delete.
 - **`send-push`** (`supabase/functions/send-push`, **`verify_jwt:false`**, service-role): looks up the recipient's tokens, POSTs to `https://exp.host/--/api/v2/push/send` (`{to,title,body,data:{plan_id,type}}`), prunes `DeviceNotRegistered` tokens, returns `{ok,sent}`. **No tokens → `{ok,sent:0}`** — the normal case now, fully safe.
 - **Trigger is async + exception-guarded** (pg_net fire-and-forget) → it can NEVER block or fail a notification insert. Auth header uses the **public publishable key** (safe to commit); the function uses its env `SUPABASE_SERVICE_ROLE_KEY` internally to read tokens.
-- **Mobile** (`lib/push.ts` + `PushBridge` in `app/_layout.tsx`): on login, `registerPushToken(user.id)` requests permission + upserts the Expo token. **Fully guarded** — `getExpoPushTokenAsync` throws on Simulator / without the entitlement+credential / without an EAS `projectId`, so it no-ops silently and logs `"push token unavailable — credential pending"` (dev only). It registers **once per user per session** (module-level guard — **do not remove it**; without it the effect re-fires `getExpoPushTokenAsync` hundreds of times). Tap-to-route: a tapped push opens `/plan/<plan_id>` (dovetails with the future deep-link work).
+- **Mobile** (`lib/push.ts` + `PushBridge` in `app/_layout.tsx`): on login, `registerPushToken(user.id)` requests permission + upserts the Expo token. On a **real device, build 5+** (APNs key + `aps-environment` live, `extra.eas.projectId` set) it returns a real `ExponentPushToken[…]` and upserts to `push_tokens`. Still **no-ops gracefully** on Simulator / older builds (`getExpoPushTokenAsync` throws there → caught, no crash). Registers **once per user per session** (module-level guard — **do not remove it**; without it the effect re-fires `getExpoPushTokenAsync` hundreds of times). Tap-to-route: a tapped push opens `/plan/<plan_id>`.
 - **Dedup:** one push per notification row (trigger fires once per insert); the in-app bell reads the same row independently — push is purely **additive**, no double-notify. No change to in-app behavior.
 - **Deliberately not done:** `addPushTokenListener` (token-change re-register) was dropped — it looped on the sim. The app re-registers on every login and device tokens rarely change; re-add later if needed.
 
-> **⚠️ Push go-live checklist** — everything above is live and safe NOW (no-ops with zero tokens). To actually deliver push (paid-account work, a separate pass):
-> 1. Add the **`expo-notifications` config plugin + `aps-environment`** entitlement in `app.json`.
-> 2. **`eas init`** (writes `extra.eas.projectId` — `getExpoPushTokenAsync` needs it) and let **EAS generate the APNs key** against the **paid** Apple team.
-> 3. **Rebuild** via EAS Build + install.
-> 4. **Test on a REAL device** — the Simulator can't receive remote push.
+> **✅ Push went LIVE with build 5** (v1.0.0, 2026-06-07) — verified end-to-end (token → `trg_notifications_push` → `send-push` → Expo → device; tap-to-route confirmed). How it was provisioned: added the **`expo-notifications`** plugin; the **APNs key** + `aps-environment` + Push capability were created by **one interactive** `eas build -p ios --profile production` ("Set up Push Notifications? → yes" → Apple login); `extra.eas.projectId` is in `app.json`; `EXPO_PUBLIC_SUPABASE_*` are **EAS env vars** (gotcha #18), not `.env`. The APNs key is cached on EAS now, so future build + submit run non-interactively. Simulator still can't receive remote push — test on a real device.
 
 ### Monthly summary system (already wired)
 
