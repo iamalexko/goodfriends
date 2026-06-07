@@ -384,7 +384,7 @@ Three options, in order of fidelity:
    - Boot once: `xcrun simctl boot "iPhone 17"` then `open -a Simulator`.
    - Screenshot at any time: `xcrun simctl io booted screenshot /tmp/x.png` → then `Read /tmp/x.png` (Claude sees pixels).
    - The native build installs into the sim via `npx expo run:ios`.
-   - After JS edits, force the sim to refetch the bundle: `xcrun simctl terminate booted com.goodfriends.app && xcrun simctl launch booted com.goodfriends.app`.
+   - After JS edits, force the sim to refetch the bundle: `xcrun simctl terminate booted com.goodfriends.crew && xcrun simctl launch booted com.goodfriends.crew`. (Bundle id is `com.goodfriends.crew` — `com.goodfriends.app` was taken on Apple's global namespace, PR #59.)
 
 2. **Expo for web** via Claude Preview MCP (`expo-web` config in `.claude/launch.json`).
    - `mcp__Claude_Preview__preview_start({ name: 'expo-web' })` → `preview_resize({ preset: 'mobile' })` → `preview_screenshot`.
