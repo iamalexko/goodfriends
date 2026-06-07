@@ -10,16 +10,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import Animated, {
-  useSharedValue,
-  useAnimatedScrollHandler,
-} from 'react-native-reanimated'
 
-import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../context/AuthContext'
-import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
-import { PlanCard, Plan } from '../../components/PlanCard'
-import { SkeletonCard, SkeletonText } from '../../components/Skeleton'
+import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../context/AuthContext'
+import { PlanCard, Plan } from '../../../components/PlanCard'
+import { SkeletonCard, SkeletonText } from '../../../components/Skeleton'
 
 // Local YYYY-MM-DD — never via toISOString(), which is UTC and would mislabel
 // Today/Tomorrow near midnight in Dubai (UTC+4).
@@ -146,16 +141,6 @@ export default function Home() {
 
   const firstName = profile?.display_name?.split(' ')[0] || 'there'
 
-  // scrollY drives AppHeader's glass. useAnimatedScrollHandler runs on the UI
-  // thread so the glass tracks the finger 1:1 with no JS bridge latency.
-  const scrollY = useSharedValue(0)
-  const onScroll = useAnimatedScrollHandler((e) => {
-    scrollY.value = e.contentOffset.y
-  })
-
-  // Top padding clears the AppHeader (insets.top + 52 row + 12 breathing).
-  const headerPadTop = insets.top + APP_HEADER_ROW_HEIGHT + 12
-
   // ---- Week window + day grouping (all client-side) ----
   const now = new Date()
   const todayStr = ymd(now)
@@ -217,145 +202,150 @@ export default function Home() {
   const visibleDates = dayFilter === 'all' ? sortedDates : sortedDates.filter((d) => d === dayFilter)
   const isEmpty = weekPlans.length === 0 && laterPlans.length === 0
 
-  return (
-    <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
-      {loading ? (
-        <View style={{ flex: 1, paddingTop: headerPadTop }}>
-          <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 14, gap: 8 }}>
-            <SkeletonText width={150} height={20} />
-            <SkeletonText width={120} height={11} />
-          </View>
-          <SkeletonText width={88} height={10} style={{ marginLeft: 20, marginBottom: 12 }} />
-          <SkeletonCard />
-          <SkeletonCard />
+  // The native Stack header (app/(tabs)/home/_layout.tsx) is transparent, so the
+  // glass bar floats over this content. The ScrollView is the screen's direct
+  // first child and uses contentInsetAdjustmentBehavior="automatic" so iOS insets
+  // the content correctly under the bar — no manual top padding, no scroll
+  // animation.
+  if (loading) {
+    return (
+      <ScrollView
+        style={styles.screen}
+        contentInsetAdjustmentBehavior="automatic"
+        scrollEnabled={false}
+      >
+        <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 14, gap: 8 }}>
+          <SkeletonText width={150} height={20} />
+          <SkeletonText width={120} height={11} />
         </View>
-      ) : (
-        <Animated.ScrollView
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          contentContainerStyle={{
-            paddingTop: headerPadTop,
-            // The translucent NativeTabs bar overlays the full-screen scroll
-            // content. insets.bottom is only the home indicator (~34pt) — add
-            // ~72 so the last card clears the bar.
-            paddingBottom: insets.bottom + 72,
-          }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
-          }
+        <SkeletonText width={88} height={10} style={{ marginLeft: 20, marginBottom: 12 }} />
+        <SkeletonCard />
+        <SkeletonCard />
+      </ScrollView>
+    )
+  }
+
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={{
+        // The translucent NativeTabs bar overlays the full-screen scroll content.
+        // insets.bottom is only the home indicator (~34pt) — add ~72 so the last
+        // card clears the bar.
+        paddingBottom: insets.bottom + 72,
+      }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />
+      }
+    >
+      {/* Greeting + one-line week summary (no crew pill). */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 14 }}>
+        <Text
+          numberOfLines={1}
+          style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, fontWeight: '700', color: '#111111', letterSpacing: -0.4, lineHeight: 25 }}
         >
-          {/* Greeting + one-line week summary (no crew pill). */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 14 }}>
-            <Text
-              numberOfLines={1}
-              style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, fontWeight: '700', color: '#111111', letterSpacing: -0.4, lineHeight: 25 }}
-            >
-              Hey {firstName} {profile?.emoji || '👋'}
-            </Text>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: totalNeedsReply ? '#FB923C' : '#2E7355', marginTop: 3 }}>
-              {totalNeedsReply > 0
-                ? `${totalNeedsReply} plan${totalNeedsReply > 1 ? 's' : ''} need your reply this week`
-                : "You're all caught up ✓"}
-            </Text>
-          </View>
+          Hey {firstName} {profile?.emoji || '👋'}
+        </Text>
+        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: totalNeedsReply ? '#FB923C' : '#2E7355', marginTop: 3 }}>
+          {totalNeedsReply > 0
+            ? `${totalNeedsReply} plan${totalNeedsReply > 1 ? 's' : ''} need your reply this week`
+            : "You're all caught up ✓"}
+        </Text>
+      </View>
 
-          {/* Day filter chips: All + one per day-with-plans. */}
-          {weekPlans.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 14 }}
-            >
-              <DayChip
-                label="All"
-                count={weekPlans.length}
-                state="all"
-                selected={dayFilter === 'all'}
-                onPress={() => setDayFilter('all')}
-              />
-              {sortedDates.map((d) => (
-                <DayChip
-                  key={d}
-                  label={dayChipLabel(d)}
-                  count={(byDate.get(d) || []).length}
-                  state={dayHasReply(d) ? 'reply' : 'done'}
-                  selected={dayFilter === d}
-                  onPress={() => setDayFilter(d)}
-                />
-              ))}
-            </ScrollView>
-          )}
-
-          {/* Feed */}
-          {isEmpty ? (
-            <View
-              style={{
-                marginHorizontal: 20,
-                marginBottom: 12,
-                padding: 20,
-                borderRadius: 20,
-                backgroundColor: '#FFFFFF',
-                borderWidth: 1,
-                borderColor: 'rgba(0,0,0,0.06)',
-                alignItems: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.08,
-                shadowRadius: 8,
-                elevation: 3,
-              }}
-            >
-              <Text style={{ fontSize: 28, marginBottom: 8 }}>🎉</Text>
-              <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 4 }}>
-                No plans yet
-              </Text>
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', textAlign: 'center' }}>
-                Use the + Plan button up top to plan something.
-              </Text>
-            </View>
-          ) : (
-            <>
-              {visibleDates.map((d) => (
-                <View key={d}>
-                  <FeedHeader {...dayHeaderParts(d)} />
-                  {(byDate.get(d) || []).map((plan) => (
-                    <PlanCard
-                      key={plan.id}
-                      plan={plan}
-                      // The dated day header above already shows the date — drop it on the card.
-                      showDate={false}
-                      onPress={() => router.push(`/plan/${plan.id}` as any)}
-                      onRsvp={(s) => handleInlineRsvp(plan, s)}
-                    />
-                  ))}
-                </View>
-              ))}
-
-              {/* Beyond this week: one group per month. A month doesn't pin the exact
-                  day, so these cards keep their date (showDate). */}
-              {dayFilter === 'all' &&
-                sortedMonths.map((mk, mi) => (
-                  <View key={mk}>
-                    <FeedHeader word={monthLabel(mk)} sub={mi === 0 ? 'later' : undefined} />
-                    {(byMonth.get(mk) || []).map((plan) => (
-                      <PlanCard
-                        key={plan.id}
-                        plan={plan}
-                        showDate
-                        onPress={() => router.push(`/plan/${plan.id}` as any)}
-                        onRsvp={(s) => handleInlineRsvp(plan, s)}
-                      />
-                    ))}
-                  </View>
-                ))}
-            </>
-          )}
-        </Animated.ScrollView>
+      {/* Day filter chips: All + one per day-with-plans. */}
+      {weekPlans.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 14 }}
+        >
+          <DayChip
+            label="All"
+            count={weekPlans.length}
+            state="all"
+            selected={dayFilter === 'all'}
+            onPress={() => setDayFilter('all')}
+          />
+          {sortedDates.map((d) => (
+            <DayChip
+              key={d}
+              label={dayChipLabel(d)}
+              count={(byDate.get(d) || []).length}
+              state={dayHasReply(d) ? 'reply' : 'done'}
+              selected={dayFilter === d}
+              onPress={() => setDayFilter(d)}
+            />
+          ))}
+        </ScrollView>
       )}
 
-      {/* AppHeader sits OVER the scroll view — rendered after so it stacks on top. */}
-      <AppHeader scrollY={scrollY} />
-    </View>
+      {/* Feed */}
+      {isEmpty ? (
+        <View
+          style={{
+            marginHorizontal: 20,
+            marginBottom: 12,
+            padding: 20,
+            borderRadius: 20,
+            backgroundColor: '#FFFFFF',
+            borderWidth: 1,
+            borderColor: 'rgba(0,0,0,0.06)',
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            elevation: 3,
+          }}
+        >
+          <Text style={{ fontSize: 28, marginBottom: 8 }}>🎉</Text>
+          <Text style={{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 4 }}>
+            No plans yet
+          </Text>
+          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: '#AAAAAA', textAlign: 'center' }}>
+            Use the + Plan button up top to plan something.
+          </Text>
+        </View>
+      ) : (
+        <>
+          {visibleDates.map((d) => (
+            <View key={d}>
+              <FeedHeader {...dayHeaderParts(d)} />
+              {(byDate.get(d) || []).map((plan) => (
+                <PlanCard
+                  key={plan.id}
+                  plan={plan}
+                  // The dated day header above already shows the date — drop it on the card.
+                  showDate={false}
+                  onPress={() => router.push(`/plan/${plan.id}` as any)}
+                  onRsvp={(s) => handleInlineRsvp(plan, s)}
+                />
+              ))}
+            </View>
+          ))}
+
+          {/* Beyond this week: one group per month. A month doesn't pin the exact
+              day, so these cards keep their date (showDate). */}
+          {dayFilter === 'all' &&
+            sortedMonths.map((mk, mi) => (
+              <View key={mk}>
+                <FeedHeader word={monthLabel(mk)} sub={mi === 0 ? 'later' : undefined} />
+                {(byMonth.get(mk) || []).map((plan) => (
+                  <PlanCard
+                    key={plan.id}
+                    plan={plan}
+                    showDate
+                    onPress={() => router.push(`/plan/${plan.id}` as any)}
+                    onRsvp={(s) => handleInlineRsvp(plan, s)}
+                  />
+                ))}
+              </View>
+            ))}
+        </>
+      )}
+    </ScrollView>
   )
 }
 
@@ -428,3 +418,10 @@ function FeedHeader({ word, sub }: { word: string; sub?: string }) {
     </View>
   )
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#FFFBF5',
+  },
+})

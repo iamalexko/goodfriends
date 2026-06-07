@@ -1,18 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Image, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useHeaderHeight } from '@react-navigation/elements'
 import { useRouter } from 'expo-router'
 import { MapPin, Camera } from 'phosphor-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import Animated, {
-  useSharedValue,
-  useAnimatedScrollHandler,
-} from 'react-native-reanimated'
 
-import { supabase } from '../../lib/supabase'
-import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
-import { Plan } from '../../components/PlanCard'
-import { SkeletonCard } from '../../components/Skeleton'
+import { supabase } from '../../../lib/supabase'
+import { Plan } from '../../../components/PlanCard'
+import { SkeletonCard } from '../../../components/Skeleton'
 
 type Tab = 'upcoming' | 'past'
 
@@ -147,14 +143,11 @@ export default function Plans() {
     setRefreshing(false)
   }
 
-  // scrollY drives AppHeader's glass (UI-thread driven).
-  const scrollY = useSharedValue(0)
-  const onScroll = useAnimatedScrollHandler((e) => {
-    scrollY.value = e.contentOffset.y
-  })
-
-  // Top padding clears the AppHeader (insets.top + 52 row + 12 breathing).
-  const headerPadTop = insets.top + APP_HEADER_ROW_HEIGHT + 12
+  // The native transparent header floats over the content; pad the FIXED header
+  // section (title + tabs) below it. (Scroll views inset themselves via
+  // contentInsetAdjustmentBehavior; this fixed View doesn't, so use the measured
+  // native header height.)
+  const headerPadTop = useHeaderHeight()
   const todayStr = ymd(new Date())
 
   // Horizontal pager — Upcoming (page 0) / Past (page 1). Tapping a tab scrolls
@@ -291,31 +284,25 @@ export default function Plans() {
             style={{ flex: 1 }}
           >
             <View style={{ width }}>
-              <Animated.ScrollView
-                onScroll={onScroll}
-                scrollEventThrottle={16}
+              <ScrollView
                 contentContainerStyle={{ paddingTop: 14, paddingBottom: insets.bottom + 72 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />}
               >
                 {upcomingBody}
-              </Animated.ScrollView>
+              </ScrollView>
             </View>
 
             <View style={{ width }}>
-              <Animated.ScrollView
-                onScroll={onScroll}
-                scrollEventThrottle={16}
+              <ScrollView
                 contentContainerStyle={{ paddingTop: 14, paddingBottom: insets.bottom + 72 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FB923C" />}
               >
                 {pastBody}
-              </Animated.ScrollView>
+              </ScrollView>
             </View>
           </ScrollView>
         </View>
       )}
-
-      <AppHeader scrollY={scrollY} />
     </View>
   )
 }
