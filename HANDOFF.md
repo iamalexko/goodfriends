@@ -21,7 +21,10 @@ Monorepo, npm workspaces:
 - **`packages/shared`** — platform-agnostic constants (`COLORS`, `RSVP_OPTIONS`, `EMOJIS`) + utils (`getMemberTags`, `getGroupTags`, `getTimeTag`, `formatTimeAgo`, `getPriorityScore`). Consumed via `@goodfriends/shared`.
 - **Backend**: Supabase (Postgres 17, RLS, Realtime, Edge Functions, Storage, pg_cron)
 - **Hosting (web)**: Vercel auto-deploys from `main`, root `vercel.json` builds `apps/web/`
-- **Mobile distribution**: local native build; **EAS Build → TestFlight config is ready** (`apps/mobile/eas.json`) — build not yet run (needs Apple creds). See Build environment gotchas → EAS.
+- **Mobile distribution — live on TestFlight via EAS.** App `@iamalexko/goodfriends` (projectId `f013d069-172f-4703-bc4e-2c05cbf9fd87`), bundle **`com.goodfriends.crew`** (`com.goodfriends.app` was taken on Apple's global namespace), Apple team `HR2H84C336`, **ASC app id `6777759240`**. Signing creds + an App Store Connect API key are stored **on EAS servers**, and `eas.json` carries the team + ascAppId, so both steps run **non-interactive**:
+  - Build: `cd apps/mobile && eas build -p ios --profile production` — autoIncrements `ios.buildNumber` (`appVersionSource: local`, so `app.json` is the source of truth — **commit the bump**).
+  - Submit: `eas submit -p ios --latest` → ASC "processing" ~10–15 min → **TestFlight → Internal Testing** (instant, no review, ≤100 testers).
+  - First-build gotcha that bit us: a project **`.npmrc` with `legacy-peer-deps=true`** is required or EAS's strict `npm ci` fails the *Install dependencies* phase (local npm hid it via a global setting).
 - **Repo**: https://github.com/iamalexko/goodfriends (public)
 - **Live web URL**: https://goodfriends-git-main-alex-ko-projects.vercel.app
 
