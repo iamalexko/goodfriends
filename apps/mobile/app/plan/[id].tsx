@@ -7,8 +7,9 @@ import { CalendarBlank, Clock, MapPin, PencilSimple, Check, Camera, PaperPlaneTi
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
 import { LinearGradient } from 'expo-linear-gradient'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import Animated, { useSharedValue, useAnimatedScrollHandler, useAnimatedStyle, interpolate, Extrapolation, runOnJS, FadeInDown } from 'react-native-reanimated'
+import Animated, { useSharedValue, useAnimatedScrollHandler, useAnimatedStyle, useAnimatedKeyboard, interpolate, Extrapolation, runOnJS, FadeInDown } from 'react-native-reanimated'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { resolveCover, COVER_PRESETS } from '@goodfriends/shared'
 
@@ -23,6 +24,10 @@ import { GlassSurface, GlassPanel } from '../../components/GlassSurface'
 import { CenterDialog } from '../../components/CenterDialog'
 
 const HERO_H = 266
+
+// One-time guard — some iOS 26 betas ship without the Liquid Glass API; calling
+// <GlassView> there crashes (HANDOFF gotcha #16). Drives the composer material.
+const COMPOSER_GLASS = isLiquidGlassAvailable()
 
 // RSVP options + selected styling — mirrors apps/web/src/screens/PlanDetail.jsx
 // exactly (pastel fill + coloured border + soft glow; ink label + grey sub).
@@ -189,6 +194,14 @@ export default function PlanDetail() {
       { translateY: interpolate(scrollY.value, [-HERO_H, 0, HERO_H], [HERO_H / 2, 0, HERO_H / 3], Extrapolation.CLAMP) },
       { scale: interpolate(scrollY.value, [-HERO_H, 0], [1.6, 1], Extrapolation.CLAMP) },
     ],
+  }))
+
+  // The floating glass composer is absolute (so the Moments feed scrolls behind
+  // it); since it's OUTSIDE the KeyboardAvoidingView, lift it above the keyboard
+  // ourselves. (Subtract insets.bottom so it doesn't over-lift by the safe area.)
+  const keyboard = useAnimatedKeyboard()
+  const composerKbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -Math.max(0, keyboard.height.value - insets.bottom) }],
   }))
 
   useEffect(() => {
@@ -904,15 +917,18 @@ export default function PlanDetail() {
   const partyEmojis = [...new Set(['🎉', '✨', '🥳', '🔥', '🙌', '💫', ...(rsvps.map((r) => r.profiles?.emoji).filter(Boolean) as string[])])]
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#FFFBF5' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
       <StatusBar style="light" />
 
+      {/* KAV wraps only the scroll; the floating composer is an absolute sibling
+          lifted independently via useAnimatedKeyboard (composerKbStyle). */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Animated.ScrollView
         style={{ flex: 1 }}
         onScroll={onScroll}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: Math.max(28, insets.bottom + 16) }}
+        contentContainerStyle={{ paddingBottom: canViewMoments ? insets.bottom + 104 : Math.max(28, insets.bottom + 16) }}
       >
         {/* ===== SLICE A — Parallax cover hero ===== */}
         <View style={{ height: HERO_H, overflow: 'hidden', backgroundColor: '#1A1A1A' }}>
@@ -1275,44 +1291,67 @@ export default function PlanDetail() {
         )}
         </View>
       </Animated.ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* ===== Floating composer pinned to the bottom (crew-only) ===== */}
+      {/* ===== Floating liquid-glass Moments composer (Claude pattern) =====
+          One glass container; the text row is the stable anchor and the photo
+          thumbnail inserts ABOVE it (container grows upward). Absolute so the
+          feed scrolls behind it; a scrim keeps legibility. */}
       {canViewMoments && (
-        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: Math.max(10, insets.bottom + 4), backgroundColor: 'rgba(255,251,245,0.97)', borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' }}>
-          {editingPost && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 6 }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#B07B16' }}>Editing comment…</Text>
-              <Pressable onPress={cancelEditing} hitSlop={8}><X size={14} weight="bold" color="#AAAAAA" /></Pressable>
-            </View>
-          )}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: composerText.trim() || composerPhoto ? '#E2683F' : 'rgba(0,0,0,0.1)', borderRadius: 999, backgroundColor: '#FFFFFF', paddingLeft: 8, paddingRight: 6, paddingVertical: 6 }}>
-            <EmojiAvatar emoji={profile?.emoji || '😎'} size="sm" />
-            {composerPhoto && (
-              <View style={{ width: 34, height: 34, borderRadius: 8, overflow: 'hidden' }}>
-                <Image source={{ uri: composerPhoto.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                <Pressable onPress={removeComposerPhoto} style={{ position: 'absolute', top: 1, right: 1, width: 14, height: 14, borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
-                  <X size={8} weight="bold" color="#FFFFFF" />
-                </Pressable>
+        <>
+          {/* Scrim — soft cream fade so the feed behind doesn't crowd the glass. */}
+          <LinearGradient
+            colors={['rgba(255,251,245,0)', 'rgba(255,251,245,0.55)']}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 130 }}
+            pointerEvents="none"
+          />
+
+          <Animated.View style={[{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 8 }, composerKbStyle]}>
+            {editingPost && (
+              <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,251,245,0.94)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 6, marginLeft: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.06)' }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#B07B16' }}>Editing comment…</Text>
+                <Pressable onPress={cancelEditing} hitSlop={8}><X size={12} weight="bold" color="#AAAAAA" /></Pressable>
               </View>
             )}
-            <TextInput
-              ref={composerInputRef}
-              value={composerText}
-              onChangeText={setComposerText}
-              placeholder={composerPhoto ? 'Add a caption…' : 'Add a moment…'}
-              placeholderTextColor="#BBBBBB"
-              style={{ flex: 1, fontFamily: 'Inter_500Medium', fontSize: 14, color: '#111111', paddingVertical: 4 }}
-            />
-            {!editingPost && (
-              <Pressable onPress={pickPhoto} hitSlop={6} style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
-                <Camera size={18} weight="regular" color="#888888" />
-              </Pressable>
-            )}
-            <Pressable onPress={submitPost} disabled={uploading || (!composerText.trim() && !composerPhoto)} style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: composerText.trim() || composerPhoto ? '#111111' : '#E5E7EB' }}>
-              {uploading ? <BreathingDot size={7} color="#FFFFFF" /> : <PaperPlaneTilt size={16} weight="fill" color={composerText.trim() || composerPhoto ? '#FFFFFF' : '#AAAAAA'} />}
-            </Pressable>
-          </View>
-        </View>
+
+            <ComposerSurface>
+              <View style={{ padding: 6 }}>
+                {/* Photo thumbnail — inserts ABOVE the text row; removing collapses it. */}
+                {composerPhoto && (
+                  <View style={{ flexDirection: 'row', paddingHorizontal: 4, paddingTop: 4, paddingBottom: 8 }}>
+                    <View style={{ width: 54, height: 54, borderRadius: 12, overflow: 'hidden' }}>
+                      <Image source={{ uri: composerPhoto.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                      <Pressable onPress={removeComposerPhoto} style={{ position: 'absolute', top: 3, right: 3, width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
+                        <X size={10} weight="bold" color="#FFFFFF" />
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+
+                {/* Anchored text row — never moves between states. */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 6 }}>
+                  <EmojiAvatar emoji={profile?.emoji || '😎'} size="sm" />
+                  <TextInput
+                    ref={composerInputRef}
+                    value={composerText}
+                    onChangeText={setComposerText}
+                    placeholder={composerPhoto ? 'Add a caption…' : 'Add a moment…'}
+                    placeholderTextColor="#9A8C74"
+                    style={{ flex: 1, fontFamily: 'Inter_500Medium', fontSize: 14, color: '#111111', paddingVertical: 6 }}
+                  />
+                  {!editingPost && (
+                    <Pressable onPress={pickPhoto} hitSlop={6} style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.04)' }}>
+                      <Camera size={18} weight="regular" color="#6B6B6B" />
+                    </Pressable>
+                  )}
+                  <Pressable onPress={submitPost} disabled={uploading || (!composerText.trim() && !composerPhoto)} style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: composerText.trim() || composerPhoto ? '#111111' : 'rgba(17,17,17,0.18)' }}>
+                    {uploading ? <BreathingDot size={7} color="#FFFFFF" /> : <PaperPlaneTilt size={16} weight="fill" color="#FFFFFF" />}
+                  </Pressable>
+                </View>
+              </View>
+            </ComposerSurface>
+          </Animated.View>
+        </>
       )}
 
       {/* ===== Floating controls (over the scroll) ===== */}
@@ -1659,7 +1698,7 @@ export default function PlanDetail() {
 
       {/* "I'm in" celebration — spans the whole page over everything. */}
       {burstKey > 0 && <EmojiBurst key={burstKey} emojis={partyEmojis} />}
-    </KeyboardAvoidingView>
+    </View>
   )
 }
 
@@ -1703,6 +1742,32 @@ function HeroGlassCircle({ scrim, children }: { scrim: string; children: ReactNo
       <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scrim }} />
       {children}
     </GlassSurface>
+  )
+}
+
+// Composer container surface — real iOS 26 Liquid Glass (tinted white, light
+// scheme, hairline-white edge to match the header glass buttons) when available;
+// solid cream + hairline + shadow fallback on iOS 18 / unsupported. (Never
+// opacity-animate it — see HANDOFF; show/hide is handled by mounting, and the
+// keyboard lift translates a non-glass wrapper, not the glass itself.)
+function ComposerSurface({ children }: { children: ReactNode }) {
+  const surface = { borderRadius: 24, overflow: 'hidden' as const, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.6)' }
+  if (COMPOSER_GLASS) {
+    return (
+      <GlassView style={surface} glassEffectStyle="regular" colorScheme="light" tintColor="#FFFFFF">
+        {children as any}
+      </GlassView>
+    )
+  }
+  return (
+    <View
+      style={[
+        surface,
+        { backgroundColor: '#FFFBF5', borderColor: 'rgba(0,0,0,0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 16 },
+      ]}
+    >
+      {children as any}
+    </View>
   )
 }
 
