@@ -84,6 +84,11 @@ Status is communicated by **ink weight, position, and small text first** — col
 - **Dark-mode flicker fix:** the `(tabs)` `ThemeProvider` base is matched to `useColorScheme()` so glass doesn't flash on tab-switch in dark mode (cream background still forced).
 - **Still pending real-device (iOS 26) validation** — Liquid Glass doesn't render in Expo Go or meaningfully in the Simulator (sim shows layout/font/fallback only).
 
+**Moments composer — floating iOS 26 glass, image-above-text (Claude pattern).** The plan-detail Moments composer (`app/plan/[id].tsx`, `ComposerSurface`) is a floating rounded glass pill (left/right inset 12, pinned above the bottom safe area), matched to the header glass (real `GlassView` `glassEffectStyle="regular"` + `colorScheme="light"` + `tintColor="#FFFFFF"` + hairline-white edge, guarded by `isLiquidGlassAvailable()`; **solid cream `#FFFBF5` + hairline + shadow fallback** on iOS 18 / unsupported).
+- **Text row is the stable anchor** — avatar + input + faint camera circle + ink `#111` send orb (white arrow; keeps the `BreathingDot` busy state). It never moves between states.
+- **Image inserts ABOVE the text row, inside the same container** (the container grows upward; text row stays put). ~54px rounded thumbnail with a × to remove; placeholder swaps "Add a moment…" → "Add a caption…". This is the Claude input pattern.
+- **Absolute, so the feed scrolls behind it.** A scrim (`LinearGradient` transparent→`rgba(255,251,245,0.55)`) sits behind it for legibility; the scroll content pads `insets.bottom + 104` to clear it. Lifted above the keyboard via `useAnimatedKeyboard` (it's an absolute sibling of the `KeyboardAvoidingView`, which now wraps only the scroll). **Never opacity-animate the glass** — show/hide is by mounting; the keyboard lift translates the non-glass wrapper. Adaptive dark-over-bright-photo tint was deferred — the scrim is the reliable legibility guarantee. Pending real-device iOS 26 validation.
+
 ---
 
 ## 4. Patterns & rules
