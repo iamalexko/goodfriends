@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.goodfriends.crew",
-      "buildNumber": "1",
+      "buildNumber": "3",
       "config": {
         "usesNonExemptEncryption": false
       },
