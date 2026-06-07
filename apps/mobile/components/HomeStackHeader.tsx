@@ -24,12 +24,31 @@ export function HomeWordmark() {
   return <Text style={styles.wordmark}>Goodfriends.</Text>
 }
 
-// "+ Plan" — the primary CTA: solid ink (#111) pill, white icon + label.
+// "+ Plan" — the primary CTA as a BLACK liquid-glass pill: GlassView tinted ink
+// (#111) with a dark color scheme + white icon/label. Solid-ink pill fallback on
+// iOS 18 / unsupported. Stays black-with-white either way.
 function PlanButton({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} hitSlop={6} style={styles.planPill}>
+  const inner = (
+    <View style={styles.planInner}>
       <Plus size={14} weight="bold" color="#FFFFFF" />
       <Text style={styles.planLabel}>Plan</Text>
+    </View>
+  )
+  return (
+    <Pressable onPress={onPress} hitSlop={6}>
+      {LIQUID_GLASS ? (
+        <GlassView
+          style={styles.planGlass}
+          glassEffectStyle="regular"
+          colorScheme="dark"
+          tintColor="#111111"
+          isInteractive
+        >
+          {inner}
+        </GlassView>
+      ) : (
+        <View style={[styles.planGlass, styles.planInk]}>{inner}</View>
+      )}
     </Pressable>
   )
 }
@@ -152,14 +171,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  planPill: {
+  planGlass: {
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  planInner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#111111',
-    borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 13,
+  },
+  planInk: {
+    backgroundColor: '#111111',
   },
   planLabel: {
     fontSize: 12,
