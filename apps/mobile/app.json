@@ -11,10 +11,12 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.goodfriends.app",
       "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "Goodfriends uses your camera to add photos to plan moments.",
-        "NSPhotoLibraryUsageDescription": "Goodfriends accesses your photos to share moments with your crew.",
-        "ITSAppUsesNonExemptEncryption": false
+        "NSPhotoLibraryUsageDescription": "Goodfriends accesses your photos to share moments with your crew."
       }
     },
     "android": {
