@@ -1,5 +1,6 @@
+import { useColorScheme } from 'react-native'
 import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs'
-import { ThemeProvider, DefaultTheme } from '@react-navigation/native'
+import { ThemeProvider, DefaultTheme, DarkTheme } from '@react-navigation/native'
 
 // Native iOS tab bar — genuine Liquid Glass material + interactive lens
 // rendered by UIKit, not by us. Replaces the custom LiquidGlassTabBar
@@ -14,14 +15,19 @@ import { ThemeProvider, DefaultTheme } from '@react-navigation/native'
 // `.Label`. Using the wrong namespacing renders nothing and crashes the
 // reconciler with "Cannot read property 'displayName' of undefined".
 //
-// ThemeProvider override sets the navigator background to our warm
-// cream so iOS doesn't flash white during tab transitions.
+// ThemeProvider override sets the navigator background to our warm cream so iOS
+// doesn't flash white during tab transitions. The base theme is matched to the
+// system colour scheme (useColorScheme) so the iOS 26 Liquid Glass — the tab bar
+// and Home's native header buttons — doesn't flash on tab-switch in dark mode.
+// (We always force the cream background; the app itself is light/cream only.)
 export default function TabLayout() {
+  const scheme = useColorScheme()
+  const base = scheme === 'dark' ? DarkTheme : DefaultTheme
   return (
     <ThemeProvider
       value={{
-        ...DefaultTheme,
-        colors: { ...DefaultTheme.colors, background: '#FFFBF5' },
+        ...base,
+        colors: { ...base.colors, background: '#FFFBF5' },
       }}
     >
       <NativeTabs tintColor="#111111" minimizeBehavior="onScrollDown">

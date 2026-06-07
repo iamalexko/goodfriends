@@ -466,7 +466,9 @@ import { House } from 'phosphor-react-native'
 
 ### Top header — `AppHeader` (always-on frosted glass)
 
-`apps/mobile/components/AppHeader.tsx`, mounted by each `(tabs)/*` screen.
+`apps/mobile/components/AppHeader.tsx`, mounted by **Crew / Plans / Profile** (NOT Home — see below).
+
+> **Home is the exception — native Stack header spike (iOS 26 glass).** Home does not render `AppHeader`. It's a Stack nested under the home tab: `app/(tabs)/home/_layout.tsx` (Stack, `headerTransparent`, `headerTitle: ''`, `headerLeft`/`headerRight`) + `app/(tabs)/home/index.tsx` (the screen). Brand content lives in `components/HomeStackHeader.tsx` — `HomeWordmark` (our PJS800 `<Text>`, NOT the system title) + `HomeHeaderActions` (`+ Plan` ink pill + a bell that's a real `GlassView` chip when `isLiquidGlassAvailable()`, flat `rgba(0,0,0,0.05)` fallback otherwise). The screen's `ScrollView` is the direct first child with `contentInsetAdjustmentBehavior="automatic"` (no manual top pad, **no scroll animation** — native behavior). `(tabs)/_layout.tsx`'s `ThemeProvider` base is now `useColorScheme()`-matched (dark-mode glass-flicker fix). **This is a one-screen spike pending real-device iOS 26 validation** — glass doesn't render in Expo Go or meaningfully in the Simulator; the sim shows the layout/font/fallback only. Don't roll it out to the other tabs until confirmed on device. Full rationale in DESIGN_SYSTEM §3.
 
 - An **always-on `expo-blur` `BlurView`** (`BLUR_INTENSITY = 85`), NOT iOS 26 `GlassView`. Hard-won: `GlassView`'s lens can't be opacity-animated (blur drops out) and `MaskedView` snapshots it to a static bitmap (kills the live lens), so the scroll-fade/feather approaches all failed. A plain always-visible BlurView is the reliable answer. (Saga across PRs #27–#29.)
 - Contains the wordmark, a **"+ Plan"** pill (→ `/create`), and the **bell** with a live unread badge (realtime `notifications` subscription). The old profile button was removed from the header.

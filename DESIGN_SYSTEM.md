@@ -75,7 +75,15 @@ Status is communicated by **ink weight, position, and small text first** — col
 
 **Cards** are solid white over cream with a real shadow (translucent fills disappear on cream — never use them for cards).
 
-**Liquid glass / blur** — `AppHeader` uses an always-on `expo-blur` BlurView. **Open question (see ROADMAP P0):** "liquid glass on buttons" needs a feasibility check on the current Expo SDK — UIKit liquid glass (`expo-glass-effect`) can't be opacity-animated (this is why the fade-on-scroll header was abandoned). Buttons likely get the _look_ (translucent + blur) rather than true liquid glass. Resolve before speccing button glass.
+**Liquid glass / blur** — most screens' `AppHeader` uses an always-on `expo-blur` BlurView. **Open question (see ROADMAP P0):** "liquid glass on buttons" needs a feasibility check on the current Expo SDK — UIKit liquid glass (`expo-glass-effect`) can't be opacity-animated (this is why the fade-on-scroll header was abandoned). Buttons likely get the _look_ (translucent + blur) rather than true liquid glass. Resolve before speccing button glass.
+
+**Home header — native Stack header on iOS 26 glass (spike, Home only).** Home does **not** use the custom `AppHeader`; it has a real native Stack header (`app/(tabs)/home/_layout.tsx`, a Stack nested under the home tab) so it rides the system iOS 26 Liquid Glass nav bar. Rules that make it on-brand:
+- **Wordmark stays our font.** `headerLeft` is our own `<Text>` "Goodfriends." in Plus Jakarta Sans 800 / ink `#111` / `letterSpacing -0.4` — matched to `AppHeader` exactly. Never the system title (the system title is suppressed with `headerTitle: ''`, not `() => null`, which native-stack falls back from to the route name).
+- **`headerTransparent: true`, no `headerStyle` background** — a solid background kills the glass.
+- **Buttons:** `+ Plan` stays the solid-ink CTA; the bell is a real `GlassView` chip when `isLiquidGlassAvailable()` (guard — some iOS 26 betas lack the API and crash), falling back to the flat `rgba(0,0,0,0.05)` circle on iOS 18 / unsupported. Note iOS 26 *also* auto-wraps bar-button items in glass capsules, so on-device the bell's own `GlassView` may be redundant (validate; the flat fallback is what older iOS needs regardless).
+- **Native scroll behavior — no fade, no custom scroll animation.** The screen's `ScrollView` is the direct first child with `contentInsetAdjustmentBehavior="automatic"` so content insets under the bar; no manual top padding.
+- **Dark-mode flicker fix:** the `(tabs)` `ThemeProvider` base is matched to `useColorScheme()` so glass doesn't flash on tab-switch in dark mode (cream background still forced).
+- This is a **one-screen spike** pending real-device (iOS 26) validation — Liquid Glass doesn't render in Expo Go or meaningfully in the Simulator. Roll out to other tabs only after it's confirmed on device.
 
 ---
 
