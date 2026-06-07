@@ -41,9 +41,12 @@ function PlanButton({ onPress }: { onPress: () => void }) {
           style={styles.planGlass}
           glassEffectStyle="regular"
           colorScheme="dark"
-          tintColor="#111111"
+          tintColor="#000000"
           isInteractive
         >
+          {/* Translucent dark fill deepens the glass (the tint alone reads light
+              over cream) while keeping the liquid-glass highlights. */}
+          <View style={[StyleSheet.absoluteFill, styles.planDarken]} />
           {inner}
         </GlassView>
       ) : (
@@ -184,6 +187,9 @@ const styles = StyleSheet.create({
   },
   planInk: {
     backgroundColor: '#111111',
+  },
+  planDarken: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   planLabel: {
     fontSize: 12,
