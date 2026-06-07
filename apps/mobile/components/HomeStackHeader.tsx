@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import { useRouter } from 'expo-router'
 import { Plus, Bell } from 'phosphor-react-native'
 import * as Haptics from 'expo-haptics'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -10,22 +11,69 @@ import { useAuth } from '../context/AuthContext'
 // Brand content for the Home screen's NATIVE Stack header (see
 // app/(tabs)/home/_layout.tsx). Rendered as the header's TITLE element — a single
 // full-width row — NOT headerLeft/headerRight. Why: iOS 26 wraps left/right
-// bar-button items in glass "shared background" capsules and react-native-screens
-// 4.16 exposes no opt-out, which put an unwanted pill behind the wordmark and
-// grouped "+ Plan" + bell into one capsule. The title view is not wrapped, so
-// rendering the whole row as the title keeps the wordmark bare and the two
-// buttons distinct — matching the original AppHeader layout — while the native
-// iOS 26 glass BAR (and the NativeTabs bar) still provide the glass.
+// bar-button items in ONE glass "shared background" capsule (no opt-out in
+// react-native-screens 4.16), which put a pill behind the wordmark and grouped
+// the two buttons. The title view is not wrapped, so rendering the row as the
+// title gives us full control: a BARE wordmark + two SEPARATE buttons that each
+// carry their OWN liquid glass.
 
-// headerLeft content — our wordmark in OUR font, matched to the old AppHeader
-// exactly (Plus Jakarta Sans 800, ink #111, fontSize 18, letterSpacing -0.4).
+// One-time guard — some iOS 26 betas ship without the Liquid Glass API; calling
+// <GlassView> there crashes (HANDOFF gotcha #16).
+const LIQUID_GLASS = isLiquidGlassAvailable()
+
+// Just the wordmark — plain title text in our font, NO glass/pill behind it.
 export function HomeWordmark() {
   return <Text style={styles.wordmark}>Goodfriends.</Text>
 }
 
-// Right-side controls: "+ Plan" ink pill + a SEPARATE flat bell circle (matching
-// the original AppHeader) with a live unread badge. Two independent buttons, gap
-// between them — no shared background.
+// "+ Plan" — its OWN liquid-glass pill on iOS 26; solid-ink pill fallback on
+// iOS 18 / unsupported.
+function PlanButton({ onPress }: { onPress: () => void }) {
+  const fg = LIQUID_GLASS ? '#111111' : '#FFFFFF'
+  const inner = (
+    <View style={styles.planInner}>
+      <Plus size={14} weight="bold" color={fg} />
+      <Text style={[styles.planLabel, { color: fg }]}>Plan</Text>
+    </View>
+  )
+  return (
+    <Pressable onPress={onPress} hitSlop={6}>
+      {LIQUID_GLASS ? (
+        <GlassView style={styles.planGlass} glassEffectStyle="regular" isInteractive>
+          {inner}
+        </GlassView>
+      ) : (
+        <View style={styles.planInk}>{inner}</View>
+      )}
+    </Pressable>
+  )
+}
+
+// Bell — its OWN liquid-glass circle on iOS 26; flat rgba(0,0,0,0.05) circle
+// fallback. Carries the live unread badge.
+function BellButton({ onPress, unread }: { onPress: () => void; unread: number }) {
+  const icon = <Bell size={18} weight="regular" color="#555555" />
+  const badge =
+    unread > 0 ? (
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>{unread > 9 ? '9+' : String(unread)}</Text>
+      </View>
+    ) : null
+  return (
+    <Pressable onPress={onPress} hitSlop={6} style={styles.bellWrap}>
+      {LIQUID_GLASS ? (
+        <GlassView style={styles.bellGlass} glassEffectStyle="regular" isInteractive>
+          {icon}
+        </GlassView>
+      ) : (
+        <View style={[styles.bellGlass, styles.bellFlat]}>{icon}</View>
+      )}
+      {badge}
+    </Pressable>
+  )
+}
+
+// Right-side controls: two INDEPENDENT glass buttons with a gap between them.
 export function HomeHeaderActions() {
   const router = useRouter()
   const { user } = useAuth()
@@ -76,35 +124,20 @@ export function HomeHeaderActions() {
 
   return (
     <View style={styles.actions}>
-      {/* "+ Plan" — its own ink pill (primary CTA = ink fill). */}
-      <Pressable
+      <PlanButton
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
           router.push('/create' as any)
         }}
-        hitSlop={6}
-        style={styles.planPill}
-      >
-        <Plus size={14} weight="bold" color="#FFFFFF" />
-        <Text style={styles.planLabel}>Plan</Text>
-      </Pressable>
-
-      {/* Bell — its own separate flat circle, with the unread badge. */}
-      <Pressable onPress={() => router.push('/notifications' as any)} hitSlop={6} style={styles.bell}>
-        <Bell size={18} weight="regular" color="#555555" />
-        {unread > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{unread > 9 ? '9+' : String(unread)}</Text>
-          </View>
-        )}
-      </Pressable>
+      />
+      <BellButton onPress={() => router.push('/notifications' as any)} unread={unread} />
     </View>
   )
 }
 
 // Full-width header row used as the native header's TITLE element. width - 32,
-// centered in the bar → a 16pt margin each side (matches the old AppHeader's
-// paddingHorizontal). Wordmark left, actions right, space-between.
+// centered in the (transparent) bar → a 16pt margin each side, matching the old
+// AppHeader's paddingHorizontal. Wordmark left, the two glass buttons right.
 export function HomeHeaderRow() {
   const { width } = useWindowDimensions()
   return (
@@ -127,28 +160,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  planPill: {
+  // "+ Plan" — glass pill (iOS 26) vs ink pill (fallback). Both clip to the pill
+  // radius; `inner` holds the icon + label so the glass material sits behind them.
+  planGlass: {
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  planInk: {
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#111111',
+  },
+  planInner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#111111',
-    borderRadius: 999,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 13,
   },
   planLabel: {
-    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
     fontFamily: 'Inter_700Bold',
   },
-  bell: {
+  // Bell — glass circle (iOS 26) vs flat circle (fallback).
+  bellWrap: {
+    width: 34,
+    height: 34,
+  },
+  bellGlass: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bellFlat: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
   badge: {
     position: 'absolute',

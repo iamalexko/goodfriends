@@ -21,12 +21,15 @@ export default function HomeStackLayout() {
     <Stack
       screenOptions={{
         headerShown: true,
+        // No solid bar background — let iOS handle it (the system glass / scroll-
+        // edge appearance shows through). A solid headerStyle bg would override it.
+        headerTransparent: true,
         // Render the whole header row as the TITLE element rather than
-        // headerLeft/headerRight: iOS 26 capsule-wraps left/right bar-button
-        // items (no opt-out in react-native-screens 4.16), but the title view is
-        // not wrapped — so the wordmark stays bare and "+ Plan"/bell are distinct
-        // buttons over the native glass bar. Not headerTransparent: we keep the
-        // system glass bar background; content lays out below it.
+        // headerLeft/headerRight: iOS 26 wraps left/right bar-button items in ONE
+        // glass capsule (no opt-out in react-native-screens 4.16). The title view
+        // is not wrapped, so the wordmark stays bare and "+ Plan"/bell each carry
+        // their own GlassView (see HomeStackHeader). Content insets under the bar
+        // via contentInsetAdjustmentBehavior in index.tsx.
         headerTitleAlign: 'center',
         headerTitle: () => <HomeHeaderRow />,
       }}
