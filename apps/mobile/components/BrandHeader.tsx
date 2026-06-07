@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useRouter } from 'expo-router'
+import type { NativeStackNavigationOptions } from '@react-navigation/native-stack'
 import { Plus, Bell } from 'phosphor-react-native'
 import * as Haptics from 'expo-haptics'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
@@ -8,12 +9,13 @@ import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
-// Brand content for the Home screen's NATIVE Stack header (see
-// app/(tabs)/home/_layout.tsx). Rendered as the header's TITLE element — a single
-// full-width row — NOT headerLeft/headerRight, because iOS 26 wraps left/right
-// bar-button items in ONE glass capsule (no opt-out in react-native-screens 4.16).
-// The title view isn't wrapped, so we get full control: a BARE wordmark, the
-// solid-ink "+ Plan" CTA, and a SEPARATE liquid-glass bell.
+// Shared brand content for the tab screens' NATIVE Stack headers (Home, Crew,
+// Plans, Profile — each a Stack nested under its tab). Rendered as the header's
+// TITLE element — a single full-width row — NOT headerLeft/headerRight, because
+// iOS 26 wraps left/right bar-button items in ONE glass capsule (no opt-out in
+// react-native-screens 4.16). The title view isn't wrapped, so we get full
+// control: a BARE wordmark, the BLACK liquid-glass "+ Plan" CTA, and a SEPARATE
+// liquid-glass bell. Spread `brandStackScreenOptions` into each tab's <Stack>.
 
 // One-time guard — some iOS 26 betas ship without the Liquid Glass API; calling
 // <GlassView> there crashes (HANDOFF gotcha #16).
@@ -152,7 +154,7 @@ export function HomeHeaderActions() {
 // Full-width header row used as the native header's TITLE element. width - 32,
 // centered in the (transparent) bar → a 16pt margin each side, matching the old
 // AppHeader's paddingHorizontal. Wordmark left, "+ Plan" + bell right.
-export function HomeHeaderRow() {
+export function BrandHeaderRow() {
   const { width } = useWindowDimensions()
   return (
     <View style={{ width: width - 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -160,6 +162,16 @@ export function HomeHeaderRow() {
       <HomeHeaderActions />
     </View>
   )
+}
+
+// Shared screenOptions for a tab's native Stack header — transparent bar (iOS
+// renders its own glass) + our full-width brand row as the title (avoids the
+// iOS 26 left/right bar-button capsules). Spread into each tab's <Stack>.
+export const brandStackScreenOptions: NativeStackNavigationOptions = {
+  headerShown: true,
+  headerTransparent: true,
+  headerTitleAlign: 'center',
+  headerTitle: () => <BrandHeaderRow />,
 }
 
 const styles = StyleSheet.create({

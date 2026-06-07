@@ -1,19 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PencilSimple } from 'phosphor-react-native'
-import Animated, {
-  useSharedValue,
-  useAnimatedScrollHandler,
-} from 'react-native-reanimated'
 
-import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../context/AuthContext'
-import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
-import { Pill } from '../../components/Pill'
-import { StatCell } from '../../components/StatCell'
-import { SkeletonRow } from '../../components/Skeleton'
-import { EmojiPicker } from '../../components/EmojiPicker'
+import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../context/AuthContext'
+import { Pill } from '../../../components/Pill'
+import { StatCell } from '../../../components/StatCell'
+import { SkeletonRow } from '../../../components/Skeleton'
+import { EmojiPicker } from '../../../components/EmojiPicker'
 
 type Scores = {
   score?: number
@@ -104,25 +99,16 @@ export default function Profile() {
   if ((scores?.attendance_rate ?? 0) >= 85) TAGS.push({ label: 'Always shows up', variant: 'pink' })
   if ((scores?.plans_organised ?? 0) >= 1) TAGS.push({ label: 'Taste curator', variant: 'gold' })
 
-  // scrollY drives AppHeader's glass fade-in (UI-thread driven).
-  const scrollY = useSharedValue(0)
-  const onScroll = useAnimatedScrollHandler((e) => {
-    scrollY.value = e.contentOffset.y
-  })
-
-  // Top padding clears the AppHeader (insets.top + 52 row + 12 breathing).
-  const headerPadTop = insets.top + APP_HEADER_ROW_HEIGHT + 12
-
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
-      <Animated.ScrollView
-        onScroll={onScroll}
-        scrollEventThrottle={16}
+    <>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: '#FFFBF5' }}
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
-          paddingTop: headerPadTop,
           // The translucent NativeTabs bar overlays the full-screen scroll
           // content. insets.bottom is only the home indicator (~34pt) — add
-          // ~72 so the last row clears the bar.
+          // ~72 so the last row clears the bar. The top inset (under the native
+          // header) is handled by contentInsetAdjustmentBehavior.
           paddingBottom: insets.bottom + 72,
         }}
       >
@@ -387,10 +373,7 @@ export default function Profile() {
             </Text>
           </Pressable>
         </View>
-      </Animated.ScrollView>
-
-      {/* AppHeader sits OVER the scroll view (zIndex 100). */}
-      <AppHeader scrollY={scrollY} />
+      </ScrollView>
 
       <EmojiPicker
         visible={emojiPickerOpen}
@@ -399,6 +382,6 @@ export default function Profile() {
         onPick={pickProfileEmoji}
         onClose={() => setEmojiPickerOpen(false)}
       />
-    </View>
+    </>
   )
 }

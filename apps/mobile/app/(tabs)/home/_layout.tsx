@@ -1,40 +1,12 @@
 import { Stack } from 'expo-router'
 
-import { HomeHeaderRow } from '../../../components/HomeStackHeader'
+import { brandStackScreenOptions } from '../../../components/BrandHeader'
 
-// One-screen spike: give Home a NATIVE Stack header so it rides the iOS 26
-// Liquid Glass nav bar (vs. the custom AppHeader the other tabs still use).
-//
-// - headerTransparent so the system glass shows through; we deliberately do NOT
-//   set a solid headerStyle background (that would kill the glass).
-// - headerLeft / headerRight carry OUR brand content (wordmark in our font; the
-//   "+ Plan" pill + bell). headerTitle is suppressed — branding lives in
-//   headerLeft.
-// - No scroll-away / fade / custom animation: the header behaves as the standard
-//   native header. Content is inset via contentInsetAdjustmentBehavior on the
-//   screen's ScrollView (see index.tsx).
-//
-// Requires a real device on iOS 26 to see the glass — it does not render in
-// Expo Go or meaningfully in the Simulator.
+// Home's native Stack header — transparent iOS 26 glass bar carrying our shared
+// brand row (wordmark + black-glass "+ Plan" + glass bell). All config lives in
+// components/BrandHeader.tsx (brandStackScreenOptions), shared with the other
+// tabs. Content insets under the bar via contentInsetAdjustmentBehavior in
+// index.tsx — no scroll animation. Glass renders on a real iOS 26 device only.
 export default function HomeStackLayout() {
-  return (
-    <Stack
-      screenOptions={{
-        headerShown: true,
-        // No solid bar background — let iOS handle it (the system glass / scroll-
-        // edge appearance shows through). A solid headerStyle bg would override it.
-        headerTransparent: true,
-        // Render the whole header row as the TITLE element rather than
-        // headerLeft/headerRight: iOS 26 wraps left/right bar-button items in ONE
-        // glass capsule (no opt-out in react-native-screens 4.16). The title view
-        // is not wrapped, so the wordmark stays bare and "+ Plan"/bell each carry
-        // their own GlassView (see HomeStackHeader). Content insets under the bar
-        // via contentInsetAdjustmentBehavior in index.tsx.
-        headerTitleAlign: 'center',
-        headerTitle: () => <HomeHeaderRow />,
-      }}
-    >
-      <Stack.Screen name="index" />
-    </Stack>
-  )
+  return <Stack screenOptions={brandStackScreenOptions} />
 }

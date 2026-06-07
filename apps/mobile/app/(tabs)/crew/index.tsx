@@ -1,17 +1,12 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Animated, {
-  useSharedValue,
-  useAnimatedScrollHandler,
-} from 'react-native-reanimated'
 import { getMemberTags } from '@goodfriends/shared'
 
-import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../context/AuthContext'
-import { AppHeader, APP_HEADER_ROW_HEIGHT } from '../../components/AppHeader'
-import { StatCell } from '../../components/StatCell'
-import { SkeletonStat, SkeletonRow } from '../../components/Skeleton'
+import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../context/AuthContext'
+import { StatCell } from '../../../components/StatCell'
+import { SkeletonStat, SkeletonRow } from '../../../components/Skeleton'
 
 // Position-based bar colours: rank determines colour, not identity.
 const MEMBER_COLORS = ['#FB923C', '#818CF8', '#34D399', '#F472B6', '#60A5FA']
@@ -56,10 +51,6 @@ export default function Crew() {
   const [members, setMembers] = useState<Member[]>([])
   const [stats, setStats] = useState({ plans: 0, avgAttendance: 0, thisMonth: 0 })
   const [loading, setLoading] = useState(true)
-
-  const scrollY = useSharedValue(0)
-  const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y })
-  const headerPadTop = insets.top + APP_HEADER_ROW_HEIGHT + 12
 
   useEffect(() => {
     loadData()
@@ -141,26 +132,33 @@ export default function Crew() {
   if (scoredMembers.length >= 1) podium.push({ rank: 1, m: scoredMembers[0], height: 80, bg: 'rgba(251,146,60,0.1)', border: 'rgba(251,146,60,0.25)', color: '#FB923C', label: '1st' })
   if (scoredMembers.length >= 3) podium.push({ rank: 3, m: scoredMembers[2], height: 40, bg: 'rgba(52,211,153,0.1)', border: 'rgba(52,211,153,0.2)', color: '#34D399', label: '3rd' })
 
-  return (
-    <View style={{ flex: 1, backgroundColor: '#FFFBF5' }}>
-      {loading ? (
-        <View style={{ flex: 1, paddingTop: headerPadTop, paddingHorizontal: 20 }}>
-          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 22 }}>
-            <SkeletonStat />
-            <SkeletonStat />
-            <SkeletonStat />
-          </View>
-          <SkeletonRow />
-          <SkeletonRow />
-          <SkeletonRow />
-          <SkeletonRow />
+  if (loading) {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: '#FFFBF5' }}
+        contentInsetAdjustmentBehavior="automatic"
+        scrollEnabled={false}
+        contentContainerStyle={{ paddingHorizontal: 20 }}
+      >
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 22 }}>
+          <SkeletonStat />
+          <SkeletonStat />
+          <SkeletonStat />
         </View>
-      ) : (
-        <Animated.ScrollView
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          contentContainerStyle={{ paddingTop: headerPadTop, paddingBottom: insets.bottom + 72 }}
-        >
+        <SkeletonRow />
+        <SkeletonRow />
+        <SkeletonRow />
+        <SkeletonRow />
+      </ScrollView>
+    )
+  }
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: '#FFFBF5' }}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={{ paddingBottom: insets.bottom + 72 }}
+    >
           {/* Group hero */}
           <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderRadius: 20, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
@@ -278,10 +276,6 @@ export default function Crew() {
               })}
             </>
           )}
-        </Animated.ScrollView>
-      )}
-
-      <AppHeader scrollY={scrollY} />
-    </View>
+    </ScrollView>
   )
 }
